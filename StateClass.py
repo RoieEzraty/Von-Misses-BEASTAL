@@ -17,59 +17,45 @@ if TYPE_CHECKING:
 class StateClass:
     """Construct local states and map solver results to global coordinates."""
 
-    def __init__(self, cfg: ExperimentConfig, variables: "VariablesClass") -> None:
-        del cfg
-        self.m1_state0 = jnp.vstack(
-            (jnp.full(variables.n_units, 1e-11), jnp.zeros(variables.n_units))
-        )
-        self.m2_state0 = jnp.zeros((2, variables.n_units))
+    def __init__(self, Variabs: "VariablesClass") -> None:
+        # inherit from Variabs
+        self.m1_state0 = jnp.vstack((jnp.full(Variabs.n_units, 1e-11), jnp.zeros(Variabs.n_units)))  # outer masses, displacement and velocity
+        self.m2_state0 = jnp.zeros((2, Variabs.n_units)) # inner masses, displacement and velocity
         self.state0_local: jnp.ndarray | None = None
         self.state0_global: jnp.ndarray | None = None
         self.global_solution: jnp.ndarray | None = None
 
-    @staticmethod
-    def _free_unit_ids(n_units: int, constrained_ids: jnp.ndarray) -> jnp.ndarray:
-        """Return unit indices not present in ``constrained_ids``."""
-        constrained = {int(index) % n_units for index in constrained_ids.tolist()}
-        return jnp.asarray([index for index in range(n_units) if index not in constrained])
-
-    def get_free_dof_parameters(self, variables: "VariablesClass") -> None:
-        """Store parameter arrays for unconstrained degrees of freedom."""
-        self.m1_free_unit_ids = self._free_unit_ids(
-            variables.n_units, variables.m1_constrained_unit_ids
-        )
-        self.m2_free_unit_ids = self._free_unit_ids(
-            variables.n_units, variables.m2_constrained_unit_ids
-        )
+    def get_free_dof_parameters(self, Variabs: "VariablesClass") -> None:
+        """Store parameter arrays for unconstrained degrees of freedom.
+        It is its own function just in case I want to change what's clamped and what's not"""
+        self.m1_free_unit_ids = self._free_unit_ids(Variabs.n_units, Variabs.m1_constrained_unit_ids)
+        self.m2_free_unit_ids = self._free_unit_ids(Variabs.n_units, Variabs.m2_constrained_unit_ids)
         if not jnp.array_equal(self.m1_free_unit_ids, self.m2_free_unit_ids):
             raise NotImplementedError("The two masses must currently share their constraints.")
-        self.m1s_free = variables.m1_arr[self.m1_free_unit_ids]
-        self.m2s_free = variables.m2_arr[self.m2_free_unit_ids]
-        self.c1s_free = variables.c1_arr[self.m1_free_unit_ids]
-        self.c2s_free = variables.c2_arr[self.m2_free_unit_ids]
-        self.mu_ks_free = variables.mu_k_arr[self.m1_free_unit_ids]
+        self.m1s_free = Variabs.m1_arr[self.m1_free_unit_ids]
+        self.m2s_free = Variabs.m2_arr[self.m2_free_unit_ids]
+        self.c1s_free = Variabs.c1_arr[self.m1_free_unit_ids]
+        self.c2s_free = Variabs.c2_arr[self.m2_free_unit_ids]
+        self.mu_ks_free = Variabs.mu_k_arr[self.m1_free_unit_ids]
 
-    def get_local_global_states(
-        self, variables: "VariablesClass"
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """Build local and global initial states using the current mass states."""
+    def get_local_global_states(self, Variabs: "VariablesClass") -> tuple[jnp.ndarray, jnp.ndarray]:
+        """Build local and global initial states using the current mass states.
+        global state indices as <u_left, v_left, u_0, v_0, u_1, v_1, .... u_n, v_n, u_right, v_right>
+        (and their velocities a row under)
+        local state indices as <u_0, v_0, u_1, v_1, .... u_n, v_n>
+        (and their velocities a row under)"""
         if not hasattr(self, "m1_free_unit_ids"):
-            self.get_free_dof_parameters(variables)
-        global_state = jnp.stack((self.m1_state0, self.m2_state0), axis=-1).reshape(
-            2, variables.n_dofs
-        )
-        free_dof_ids = jnp.sort(
-            jnp.concatenate((2 * self.m1_free_unit_ids, 2 * self.m2_free_unit_ids + 1))
-        )
+            self.get_free_dof_parameters(Variabs)
+
+        global_state = jnp.stack((self.m1_state0, self.m2_state0), axis=-1).reshape(2, Variabs.n_dofs)
+        free_dof_ids = jnp.sort(jnp.concatenate((2 * self.m1_free_unit_ids, 2 * self.m2_free_unit_ids + 1)))
         self.state0_global = global_state
         self.state0_local = global_state[:, free_dof_ids]
         return self.state0_local, self.state0_global
 
-    def get_current_local_global_states(
-        self, variables: "VariablesClass", phase_description: str
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+    def get_current_local_global_states(self, Variabs: "VariablesClass", phase_description: str) -> tuple[jnp.ndarray, jnp.ndarray]:
         """Set physical units to the requested binary phase description."""
-        if len(phase_description) != variables.n_physical_units or any(
+        if len(phase_description) != Variabs.n_physical_units or any(
             bit not in "01" for bit in phase_description
         ):
             raise ValueError(
@@ -77,14 +63,14 @@ class StateClass:
             )
         physical_displacements = jnp.where(
             jnp.asarray([bit == "1" for bit in phase_description]),
-            variables.equilibrium2,
-            variables.equilibrium1,
+            Variabs.equilibrium2,
+            Variabs.equilibrium1,
         )
         m2_displacement = jnp.concatenate(
             (jnp.zeros(1), physical_displacements, jnp.zeros(1))
         )
-        self.m2_state0 = jnp.vstack((m2_displacement, jnp.zeros(variables.n_units)))
-        return self.get_local_global_states(variables)
+        self.m2_state0 = jnp.vstack((m2_displacement, jnp.zeros(Variabs.n_units)))
+        return self.get_local_global_states(Variabs)
 
     def reshape_local_to_global(
         self,
@@ -124,3 +110,9 @@ class StateClass:
             "1" if float(value) > threshold else "0"
             for value in relative_displacements
         )
+
+    @staticmethod
+    def _free_unit_ids(n_units: int, constrained_ids: jnp.ndarray) -> jnp.ndarray:
+        """Return unit indices not present in ``constrained_ids``."""
+        constrained = {int(index) % n_units for index in constrained_ids.tolist()}
+        return jnp.asarray([index for index in range(n_units) if index not in constrained])
