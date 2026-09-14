@@ -17,8 +17,9 @@ if TYPE_CHECKING:
 class EquilibriumClass:
     """Calculate the dynamic response for a configured chain."""
 
-    def __init__(self, variables: "VariablesClass") -> None:
-        self.variables = variables
+    def __init__(self, Variabs: "VariablesClass") -> None:
+        # inherit from Variabs
+        self.Variabs = Variabs
         self.force_fn = grad(self.potential_energy_constrained_ends, argnums=0)
         self.sol_free: jnp.ndarray | None = None
 
@@ -31,7 +32,7 @@ class EquilibriumClass:
         impulse_data: jnp.ndarray,
     ) -> jnp.ndarray:
         """Return total potential energy with driven-left and fixed-right ends."""
-        variables = self.variables
+        Variabs = self.Variabs
         imposed_displacement = jnp.interp(time, timepoints, impulse_data)
         displacement1 = jnp.concatenate(
             (jnp.atleast_1d(imposed_displacement), free_dof_displacement[0::2], jnp.zeros(1))
@@ -43,7 +44,7 @@ class EquilibriumClass:
             stiffness_vals[:-1, 0] * jnp.diff(displacement1) ** 2
         )
         local_energy = jnp.sum(
-            variables.potential_fn(
+            Variabs.potential_fn(
                 stiffness_vals[:, 1:].T, displacement2 - displacement1
             )
         )
@@ -98,8 +99,8 @@ class EquilibriumClass:
             state.c1s_free,
             state.c2s_free,
             state.mu_ks_free,
-            self.variables.beta,
-            self.variables.stiffness_vals,
+            self.Variabs.beta,
+            self.Variabs.stiffness_vals,
             supervisor.timepoints,
             supervisor.impulse_data,
             rtol=supervisor.rtol,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import numpy as np
 
 plt.rcParams["pdf.fonttype"] = 42
 
@@ -15,12 +16,7 @@ def plot_impulse(timepoints, impulse_data):
     """Plot an imposed displacement history in millimetres."""
     fig, ax = plt.subplots(figsize=(4, 2))
     ax.plot(timepoints, impulse_data * 1e3, color="k")
-    ax.set(
-        xlabel="Time (s)",
-        ylabel=r"$\bar{u}(t)$ (mm)",
-        title="Applied Displacement",
-        xlim=(0, float(jnp.max(timepoints))),
-    )
+    ax.set(xlabel="Time (s)", ylabel=r"$\bar{u}(t)$ (mm)", title="Applied Displacement", xlim=(0, float(jnp.max(timepoints))))
     ax.grid(False)
     fig.tight_layout()
     return fig, ax
@@ -30,18 +26,24 @@ def plot_impulse(timepoints, impulse_data):
 # -------------------------------------------------
 # Define plotting function
 def plot_response(
-    num_solution,
-    timepoints,
-    alpha=1,
+    num_solution: np.ndarray,
+    F: np.ndarray,
+    timepoints: np.ndarray,
+    alpha: float = 1,
     cmap_temporal=custom_cmap,
-    sup_title=None,
-    figsize=[8, 5],
-    spring_stiffness=CFG.Variabs.k1,
-):
-    """Plot the applied displacement, unit response, and endpoint forces."""
-    n_units = num_solution.shape[2] - 2
+    sup_title: str | None = None,
+    figsize: tuple[float, float] | None = None,
+) -> tuple[plt.Figure, np.ndarray]:
+    """Plot displacement responses and endpoint forces in 2x2 panels.
 
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=figsize)
+    F contains spring forces in N, with time along rows and springs along
+    columns. Return the figure and 2x2 main axes, excluding colorbar axes.
+    Use plot_laplace_fourier separately for the endpoint-force transforms.
+    """
+    if figsize is None:
+        figsize = (8, 5)
+    fig, axes = plt.subplots(2, 2, figsize=figsize)
+    (ax1, ax2), (ax3, ax4) = axes[:2]
 
     data_set = num_solution*10**(3)
 
@@ -86,8 +88,8 @@ def plot_response(
     #     ax3.plot(timepoints, un_disps[:, i], color=trace_colors[i], alpha=alpha, label=f'$u_{i}$')
     #     ax4.plot(timepoints, delta_disps[:, i], color=trace_colors[i], alpha=alpha, label=fr'$\delta_{i}$')
 
-    first_truss_force = spring_stiffness * (num_solution[:, 0, 0] - num_solution[:, 0, 1])
-    final_truss_force = spring_stiffness * (num_solution[:, 0, -2] - num_solution[:, 0, -1])
+    first_truss_force = F[:, 0]
+    final_truss_force = F[:, -1]
     ax4.plot(timepoints, first_truss_force, color=colors_lst[0], alpha=alpha, label='First truss')
     ax4.plot(timepoints, final_truss_force, color=colors_lst[1], alpha=alpha, label='Final truss')
     ax4.set_xlim([0, t_end])
@@ -97,9 +99,53 @@ def plot_response(
     ax4.legend(fontsize=8, loc='upper right')
 
     if sup_title is not None:
-        plt.suptitle(f'{sup_title}')
+        fig.suptitle(sup_title)
         
-    plt.tight_layout()
+    fig.tight_layout()
+    return fig, axes
+
+
+def plot_laplace_fourier(F: np.ndarray, timepoints: np.ndarray, *, laplace_sigma: float = 0.0, alpha: float = 1, sup_title: str | None = None, figsize: tuple[float, float] = (8, 3)) -> tuple[plt.Figure, np.ndarray]:
+    """Plot endpoint-force Fourier and Laplace transforms in a 1x2 figure.
+
+    F contains spring forces in N, with time along rows and springs along
+    columns; only the first and last columns are used. Times must be uniform.
+    FFT real parts are solid and imaginary parts dotted, one color per spring.
+    Laplace magnitudes use s=laplace_sigma+2j*pi*f, with sigma in 1/s.
+    Show the lower half of the nonnegative frequency range in Hz without
+    doubling FFT values. Return the figure and a length-two array of axes.
+    """
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+    fft_ax, laplace_ax = axes
+    for force, color, label in zip(
+        (F[:, 0], F[:, -1]),
+        colors_lst[:2],
+        ('First truss', 'Final truss'),
+    ):
+        frequencies, spectrum = helpers_builders.force_fft(timepoints, force)
+        nonnegative = frequencies >= 0
+        frequencies = frequencies[nonnegative]
+        s_values = laplace_sigma + 2j * np.pi * frequencies
+        _, laplace = helpers_builders.force_laplace(timepoints, force, s_values)
+        fft_ax.plot(frequencies, spectrum[nonnegative].real, color=color, alpha=alpha,
+                    linestyle='-', label=f'{label} (real)')
+        fft_ax.plot(frequencies, spectrum[nonnegative].imag, color=color, alpha=alpha,
+                    linestyle=':', label=f'{label} (imaginary)')
+        laplace_ax.plot(frequencies, np.abs(laplace), color=color, alpha=alpha, label=label)
+    fft_ax.set_title('Endpoint Force FFT', fontsize=12)
+    fft_ax.set_ylabel('Transform (N s)', fontsize=12)
+    laplace_ax.set_ylabel('Transform magnitude (N s)', fontsize=12)
+    laplace_ax.set_title(fr'Endpoint Force Laplace ($\sigma={laplace_sigma:g}$ s$^{{-1}}$)', fontsize=12)
+    for ax in (fft_ax, laplace_ax):
+        ax.set_xlabel('Frequency (Hz)', fontsize=12)
+        ax.set_xlim(0, float(frequencies[-1]) / 2 if frequencies[-1] > 0 else 1.0)
+        ax.legend(fontsize=8)
+        ax.grid(False)
+
+    if sup_title is not None:
+        fig.suptitle(sup_title)
+    fig.tight_layout()
+    return fig, axes
 
 
 # -------------------------------------------------
@@ -168,64 +214,46 @@ def detect_force_arrival(
     return float(timepoints[int(jnp.argmax(has_arrived))])
 
 
-def plot_force_comparison(
-    solutions_by_phase,
-    timepoints,
-    spring_stiffness,
-    start_time,
-    threshold_fraction=0.05,
-):
-    """Compare endpoint forces for exactly two initial phase descriptions."""
+def plot_force_comparison(solutions_by_phase, timepoints, spring_stiffness, start_time, threshold_fraction=0.05, *, show_transform: bool = True, laplace_sigma: float = 0.0):
+    """Compare two phases in 2x2 panels, optionally adding two transform rows.
+
+    With show_transform=True, row 3 shows complex FFTs of the endpoint force
+    differences (solid real, dotted imaginary); row 4 shows Laplace magnitudes
+    at s=laplace_sigma+2j*pi*f. Columns show unaligned and delay-aligned data.
+    All four transforms use the common valid time window ending at t[-1]-delay,
+    avoiding extrapolation of the advanced final force. Frequencies are in Hz,
+    sigma in 1/s, and transform values in N s. Return figure, axes, and delay.
+    """
     if len(solutions_by_phase) != 2:
         raise ValueError("Force comparison requires exactly two initial phases.")
     phase_a, phase_b = tuple(solutions_by_phase)
     forces = {}
     for phase, solution in solutions_by_phase.items():
-        forces[phase] = {
-            "first": spring_stiffness * (solution[:, 0, 0] - solution[:, 0, 1]),
-            "final": spring_stiffness * (solution[:, 0, -2] - solution[:, 0, -1]),
-        }
+        forces[phase] = {"first": spring_stiffness * (solution[:, 0, 0] - solution[:, 0, 1]),
+                         "final": spring_stiffness * (solution[:, 0, -2] - solution[:, 0, -1])}
 
-    first_arrival = detect_force_arrival(
-        timepoints, forces[phase_a]["first"], start_time, threshold_fraction
-    )
-    final_arrival = detect_force_arrival(
-        timepoints, forces[phase_a]["final"], start_time, threshold_fraction
-    )
+    first_arrival = detect_force_arrival(timepoints, forces[phase_a]["first"], start_time, threshold_fraction)
+    final_arrival = detect_force_arrival(timepoints, forces[phase_a]["final"], start_time, threshold_fraction)
     delay = final_arrival - first_arrival
     if delay < 0:
         raise ValueError("Detected final-spring arrival before first-spring arrival.")
 
     delta_first = forces[phase_a]["first"] - forces[phase_b]["first"]
     delta_final = forces[phase_a]["final"] - forces[phase_b]["final"]
-    delta_final_aligned = jnp.interp(
-        timepoints + delay, timepoints, delta_final, left=jnp.nan, right=jnp.nan
-    )
+    delta_final_aligned = jnp.interp(timepoints + delay, timepoints, delta_final, left=jnp.nan, right=jnp.nan)
     final_spring_id = next(iter(solutions_by_phase.values())).shape[2] - 1
-    fig, axes = plt.subplots(2, 2, figsize=(8, 6), sharex=True)
+    fig, axes = plt.subplots(4 if show_transform else 2, 2, figsize=(10, 12) if show_transform else (8, 6), sharex=False)
 
     for phase_id, phase in enumerate((phase_a, phase_b)):
         first_force = forces[phase]["first"]
         final_force = forces[phase]["final"]
-        final_aligned = jnp.interp(
-            timepoints + delay,
-            timepoints,
-            final_force,
-            left=jnp.nan,
-            right=jnp.nan,
-        )
-        for ax, final_signal, final_label in zip(
-            axes[0], (final_force, final_aligned), ("t", r"t+\tau")
-        ):
-            ax.plot(timepoints, first_force, color=colors_lst[phase_id],
-                    label=fr"$F_1$, initial {phase}")
-            ax.plot(timepoints, final_signal, color=colors_lst[phase_id],
-                    linestyle="--",
+        final_aligned = jnp.interp(timepoints + delay, timepoints, final_force, left=jnp.nan, right=jnp.nan)
+        for ax, final_signal, final_label in zip(axes[0], (final_force, final_aligned), ("t", r"t+\tau")):
+            ax.plot(timepoints, first_force, color=colors_lst[phase_id], label=fr"$F_1$, initial {phase}")
+            ax.plot(timepoints, final_signal, color=colors_lst[phase_id], linestyle="--",
                     label=fr"$F_{{{final_spring_id}}}({final_label})$, initial {phase}")
 
-    for ax, final_difference, final_label in zip(
-        axes[1], (delta_final, delta_final_aligned), ("t", r"t+\tau")
-    ):
+    for ax, final_difference, final_label in zip(axes[1], (delta_final, delta_final_aligned), ("t", r"t+\tau")):
         ax.plot(timepoints, delta_first, color=colors_lst[0], label=r"$\Delta F_1(t)$")
         ax.plot(timepoints, final_difference, color=red, linestyle="--",
                 label=fr"$\Delta F_{{{final_spring_id}}}({final_label})$")
@@ -242,9 +270,40 @@ def plot_force_comparison(
     axes[1, 0].set_ylabel(fr"$F^{{{phase_a}}}-F^{{{phase_b}}}$ (N)")
     for ax in axes[1]:
         ax.set_xlabel("Time (s)")
-    for ax in axes.flat:
+    for ax in axes[:2].flat:
         ax.grid(False)
         ax.set_xlim(0, float(jnp.max(timepoints)))
         ax.legend(fontsize=7)
+    if show_transform:
+        times = np.asarray(timepoints)
+        valid = times + delay <= times[-1]
+        transform_times = times[valid]
+        if transform_times.size < 2:
+            raise ValueError("Delay alignment leaves fewer than two samples for transforms.")
+        first_difference = np.asarray(delta_first)[valid]
+        for column, final_difference in enumerate((delta_final, delta_final_aligned)):
+            fft_ax, laplace_ax = axes[2, column], axes[3, column]
+            for signal, color, label in zip((first_difference, np.asarray(final_difference)[valid]), (colors_lst[0], red), ('First spring difference', 'Final spring difference')):
+                frequencies, spectrum = helpers_builders.force_fft(transform_times, signal)
+                nonnegative = frequencies >= 0
+                frequencies, spectrum = frequencies[nonnegative], spectrum[nonnegative]
+                _, laplace = helpers_builders.force_laplace(transform_times, signal, laplace_sigma + 2j * np.pi * frequencies)
+                fft_ax.plot(frequencies, spectrum.real, color=color, linestyle='-', label=f'{label} (real)')
+                fft_ax.plot(frequencies, spectrum.imag, color=color, linestyle=':', label=f'{label} (imaginary)')
+                laplace_ax.plot(frequencies, np.abs(laplace), color=color, label=label)
+            alignment = 'Delay=0' if column == 0 else fr'Delay$={delay * 1e3:.1f}$ ms'
+            fft_ax.set_title(f'Force Difference FFT {phase_a} - {phase_b}, {alignment}')
+            laplace_ax.set_title(fr'Laplace ($\sigma={laplace_sigma:g}$ s$^{{-1}}$) — {alignment}')
+            fft_ax.set_ylabel('Transform (N s)')
+            laplace_ax.set_ylabel('Transform magnitude (N s)')
+            for ax in (fft_ax, laplace_ax):
+                ax.set_xlabel('Frequency (Hz)')
+                ax.set_xlim(0, float(frequencies[-1]) / 2 if frequencies[-1] > 0 else 1.0)
+                if ax == laplace_ax:
+                    ax.set_ylim([-0.005, 0.03])
+                else:
+                    ax.set_ylim([-0.028, 0.028])
+                ax.grid(False)
+                ax.legend(fontsize=7)
     fig.tight_layout()
     return fig, axes, delay

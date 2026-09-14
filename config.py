@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import numpy as np
 
 
 @dataclass(frozen=True)
@@ -14,8 +15,8 @@ class VariablesConfig:
     driven_node: str = "1st"
     truss_model: str = "Trusses"  # "Trusses" or "4th Order"
     # setup = 'experiment_full'
-    setup = 'increasing_theta0' # Options: 'experiment_full', 'experiment_single', 'increasing_b', or 'increasing_m'
-    # setup = 'increasing_b' # Options: 'experiment_full', 'experiment_single', 'increasing_b', or 'increasing_m'
+    # setup = 'increasing_theta0' # Options: 'experiment_full', 'experiment_single', 'increasing_b', or 'increasing_m'
+    setup = 'increasing_b' # Options: 'experiment_full', 'experiment_single', 'increasing_b', or 'increasing_m'
 
     # 4th order, currently not in use
     k2: float = 125.0
@@ -47,16 +48,21 @@ class VariablesConfig:
 class SupervisorConfig:
     """Initial-state, input-pulse, and integration parameters."""
 
-    initial_phases: tuple[str, ...] = ("001", "000")
+    # initial_phases: tuple[str, ...] = ("000", "001")
+    initial_phases: tuple[str, ...] = ("000", "001", "010", "011", "100", "101", "110", "111")
     impulse_type: str = "single_sine_cycle"  # Options: 'single_sine_cycle' or 'gaussian'
     # amplitude = 22*10**(-3) # Peak amplitude [m], 1st paper to buckle
-    amplitude: float = 1.8e-3  # probe 2nd paper
-    frequency: float = 23.3
+    # amplitude: float = 1.8e-3  # probe 2nd paper
+    amplitude: float = 2.0e-3  # my try Sep14
+    # frequency: float = 23.3  # probe 2nd paper
+    frequency: float = 30  # my try Sep14
     gaussian_width: float | None = None
     start_time: float = 0.025  # Start-time offset [s] for both input types
     second_pulse_factor: float = 1.5
-    duration: float = 0.4
-    n_timepoints: int = 300
+    n_timepoints: int = 1000
+    f_cutoff: int = 100  # [Hz]
+    # duration: float = n_timepoints / (4*f_cutoff)
+    duration = 0.8
 
     # should I omit those?
     rtol: float = 1e-8

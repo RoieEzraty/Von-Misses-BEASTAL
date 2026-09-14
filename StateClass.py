@@ -19,7 +19,8 @@ class StateClass:
 
     def __init__(self, Variabs: "VariablesClass") -> None:
         # inherit from Variabs
-        self.m1_state0 = jnp.vstack((jnp.full(Variabs.n_units, 1e-11), jnp.zeros(Variabs.n_units)))  # outer masses, displacement and velocity
+        # outer masses, displacement and velocity
+        self.m1_state0 = jnp.vstack((jnp.full(Variabs.n_units, 1e-11), jnp.zeros(Variabs.n_units)))
         self.m2_state0 = jnp.zeros((2, Variabs.n_units)) # inner masses, displacement and velocity
         self.state0_local: jnp.ndarray | None = None
         self.state0_global: jnp.ndarray | None = None
@@ -53,63 +54,44 @@ class StateClass:
         self.state0_local = global_state[:, free_dof_ids]
         return self.state0_local, self.state0_global
 
-    def get_current_local_global_states(self, Variabs: "VariablesClass", phase_description: str) -> tuple[jnp.ndarray, jnp.ndarray]:
+    def get_current_local_global_states(self, Variabs: "VariablesClass",
+                                        phase_description: str) -> tuple[jnp.ndarray, jnp.ndarray]:
         """Set physical units to the requested binary phase description."""
-        if len(phase_description) != Variabs.n_physical_units or any(
-            bit not in "01" for bit in phase_description
-        ):
-            raise ValueError(
-                "phase_description must be a binary string with one bit per physical unit."
-            )
-        physical_displacements = jnp.where(
-            jnp.asarray([bit == "1" for bit in phase_description]),
-            Variabs.equilibrium2,
-            Variabs.equilibrium1,
-        )
-        m2_displacement = jnp.concatenate(
-            (jnp.zeros(1), physical_displacements, jnp.zeros(1))
-        )
+        if len(phase_description) != Variabs.n_physical_units or any(bit not in "01" for bit in phase_description):
+            raise ValueError("phase_description must be a binary string with one bit per physical unit.")
+        physical_displacements = jnp.where(jnp.asarray([bit == "1" for bit in phase_description]), Variabs.equilibrium2,
+                                           Variabs.equilibrium1)
+        m2_displacement = jnp.concatenate((jnp.zeros(1), physical_displacements, jnp.zeros(1)))
         self.m2_state0 = jnp.vstack((m2_displacement, jnp.zeros(Variabs.n_units)))
         return self.get_local_global_states(Variabs)
 
-    def reshape_local_to_global(
-        self,
-        variables: "VariablesClass",
-        supervisor: "SupervisorClass",
-        free_dof_solution: jnp.ndarray,
-    ) -> jnp.ndarray:
+    def reshape_local_to_global(self, Variabs: "VariablesClass", Sprvsr: "SupervisorClass",
+                                free_dof_solution: jnp.ndarray) -> jnp.ndarray:
         """Map a free-DOF ODE solution into global mass coordinates."""
-        n_times = supervisor.timepoints.shape[0]
-        driven_disp = supervisor.impulse_fn(supervisor.timepoints)
-        driven_vel = vmap(supervisor.dimpulse_fn)(supervisor.timepoints)
+        n_times = Sprvsr.timepoints.shape[0]
+        driven_disp = Sprvsr.impulse_fn(Sprvsr.timepoints)
+        driven_vel = vmap(Sprvsr.dimpulse_fn)(Sprvsr.timepoints)
         zeros = jnp.zeros((n_times, 1))
-        m1_displacement = jnp.concatenate(
-            (driven_disp[:, None], free_dof_solution[:, 0, 0::2], zeros), axis=1
-        )
-        m1_velocity = jnp.concatenate(
-            (driven_vel[:, None], free_dof_solution[:, 1, 0::2], zeros), axis=1
-        )
-        m2_displacement = jnp.concatenate(
-            (driven_disp[:, None], free_dof_solution[:, 0, 1::2], zeros), axis=1
-        )
-        m2_velocity = jnp.concatenate(
-            (driven_vel[:, None], free_dof_solution[:, 1, 1::2], zeros), axis=1
-        )
-        global_solution = jnp.stack(
-            (m1_displacement, m1_velocity, m2_displacement, m2_velocity), axis=1
-        )
-        self.global_solution = global_solution
-        return global_solution
 
-    def get_system_state(
-        self, vn_minus_un: jnp.ndarray, threshold: float = 15e-3
-    ) -> str:
+        # displacements
+        m1_displacement = jnp.concatenate((driven_disp[:, None], free_dof_solution[:, 0, 0::2], zeros), axis=1)
+        m1_velocity = jnp.concatenate((driven_vel[:, None], free_dof_solution[:, 1, 0::2], zeros), axis=1)
+        m2_displacement = jnp.concatenate((driven_disp[:, None], free_dof_solution[:, 0, 1::2], zeros), axis=1)
+        m2_velocity = jnp.concatenate((driven_vel[:, None], free_dof_solution[:, 1, 1::2], zeros), axis=1)
+        global_solution = jnp.stack((m1_displacement, m1_velocity, m2_displacement, m2_velocity), axis=1)
+        self.global_solution = global_solution
+
+        # forces
+        k1_forces = Variabs.k1 * (global_solution[:, 0, :-1] - global_solution[:, 0, 1:])
+        self.k1_forces = k1_forces
+
+        # return them
+        return global_solution, k1_forces
+
+    def get_system_state(self, vn_minus_un: jnp.ndarray, threshold: float = 15e-3) -> str:
         """Return a binary phase string from physical relative displacements."""
         relative_displacements = jnp.asarray(vn_minus_un).reshape(-1)
-        return "".join(
-            "1" if float(value) > threshold else "0"
-            for value in relative_displacements
-        )
+        return "".join("1" if float(value) > threshold else "0" for value in relative_displacements)
 
     @staticmethod
     def _free_unit_ids(n_units: int, constrained_ids: jnp.ndarray) -> jnp.ndarray:
