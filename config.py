@@ -12,23 +12,23 @@ import jax.numpy as jnp
 class VariablesConfig:
     """Physical and geometric parameters."""
 
-    n_units: int = 3
-    driven_node: str = "1st"
-    # truss_model: str = "Trusses"  # "Trusses" or "4th Order"
-    truss_model: str = "4th Order"  # "Trusses" or "4th Order"
-    setup = 'experiment_full'
+    n_units: int = 3  # number of Von Mises trusses
+    driven_node: str = "1st"  # impulse given to right "1st" or left "last" sides
+    truss_model: str = "Trusses"  # "Trusses" (account for tangent angle) or "4th Order" (polynomial approximation with 2 wells)
+    # truss_model: str = "4th Order"  # "Trusses" or "4th Order"
+    setup = 'experiment_full'  # Audrey's parameters
     # setup = 'increasing_theta0' # Options: 'experiment_full', 'experiment_single', 'increasing_b', or 'increasing_m'
     # setup = 'increasing_b' # Options: 'experiment_full', 'experiment_single', 'increasing_b', or 'increasing_m'
 
-    # 4th order, currently not in use
+    # parameters for 4th order polynomial, currently not in use
     k2: float = 125.0
     k4: float = 309828.0
 
-    # actual truss
+    # actual truss parameters
     experimental_data_dir: Path = Path("Audrey_exp_data")
     reference_length: float = 86e-3
-    increasing_b_mm: tuple[float, ...] = (8.3, 8.7, 9.3)
-    increasing_theta0_rise_mm: tuple[float, ...] = (8.3, 10.7, 12.3)
+    increasing_b_mm: tuple[float, ...] = (8.3, 8.7, 9.3)  # b parameters for each truss increasing
+    increasing_theta0_rise_mm: tuple[float, ...] = (8.3, 10.7, 12.3)  # rest angle for each truss increasing 
     increasing_theta0_span_mm: float = 40.0
 
     # relevant for both
@@ -62,17 +62,17 @@ class SupervisorConfig:
     gaussian_width: float | None = None
     start_time: float = 0.025  # Start-time offset [s] for both input types
     second_pulse_factor: float = 1.5
-    n_timepoints: int = 1000
-    f_cutoff: int = 100  # [Hz]
+    n_timepoints: int = 1000  # for equilibrium integration
+    # f_cutoff: int = 100  # [Hz]
     # duration: float = n_timepoints / (4*f_cutoff)
     duration = 0.8
 
-    # should I omit those?
+    # for ODE solution, not in use, should I omit those?
     rtol: float = 1e-8
     atol: float = 1e-8
     mxstep: int = 10_000
 
-    # training params
+    # training params, not relevant for Nathan
     T: int = 100
     alpha: float = 0.1
     loss_type: str = "buckle"

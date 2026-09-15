@@ -105,7 +105,8 @@ def plot_response(
     return fig, axes
 
 
-def plot_laplace_fourier(F: np.ndarray, timepoints: np.ndarray, *, laplace_sigma: float = 0.0, alpha: float = 1, sup_title: str | None = None, figsize: tuple[float, float] = (8, 3)) -> tuple[plt.Figure, np.ndarray]:
+def plot_laplace_fourier(F: np.ndarray, timepoints: np.ndarray, *, laplace_sigma: float = 0.0, alpha: float = 1, 
+                         sup_title: str | None = None, figsize: tuple[float, float] = (8, 3)) -> tuple[plt.Figure, np.ndarray]:
     """Plot endpoint-force Fourier and Laplace transforms in a 1x2 figure.
 
     F contains spring forces in N, with time along rows and springs along
@@ -188,21 +189,13 @@ def plot_potential(variables, x_min=-0.005, x_max=0.031):
         params = variables.bistable_potential_params[1:-1].T
         energy = helpers_builders.bistable_potential(params, displacement[:, None])
         ax.plot(displacement * 1e3, energy * 1e3)
-    ax.set(
-        xlabel="Displacement (mm)",
-        ylabel="Energy (mJ)",
-        title="Bistable Energy Landscape",
-    )
+    ax.set(xlabel="Displacement (mm)", ylabel="Energy (mJ)", title="Bistable Energy Landscape")
     fig.tight_layout()
     return fig, ax
 
 
-def detect_force_arrival(
-    timepoints: jnp.ndarray,
-    force: jnp.ndarray,
-    start_time: float,
-    threshold_fraction: float = 0.05,
-) -> float:
+def detect_force_arrival(timepoints: jnp.ndarray, force: jnp.ndarray, start_time: float,
+                         threshold_fraction: float = 0.05,) -> float:
     """Return the first post-input time at a fraction of peak force."""
     if not 0 < threshold_fraction <= 1:
         raise ValueError("threshold_fraction must lie in (0, 1].")
@@ -214,7 +207,8 @@ def detect_force_arrival(
     return float(timepoints[int(jnp.argmax(has_arrived))])
 
 
-def plot_force_comparison(solutions_by_phase, timepoints, spring_stiffness, start_time, threshold_fraction=0.05, *, show_transform: bool = True, laplace_sigma: float = 0.0):
+def plot_force_comparison(solutions_by_phase, timepoints, spring_stiffness, start_time, threshold_fraction=0.05, *, 
+                          show_transform: bool = True, laplace_sigma: float = 0.0):
     """Compare two phases in 2x2 panels, optionally adding two transform rows.
 
     With show_transform=True, row 3 shows complex FFTs of the endpoint force
@@ -283,11 +277,13 @@ def plot_force_comparison(solutions_by_phase, timepoints, spring_stiffness, star
         first_difference = np.asarray(delta_first)[valid]
         for column, final_difference in enumerate((delta_final, delta_final_aligned)):
             fft_ax, laplace_ax = axes[2, column], axes[3, column]
-            for signal, color, label in zip((first_difference, np.asarray(final_difference)[valid]), (colors_lst[0], red), ('First spring difference', 'Final spring difference')):
+            for signal, color, label in zip((first_difference, np.asarray(final_difference)[valid]), (colors_lst[0], red), 
+                                            ('First spring difference', 'Final spring difference')):
                 frequencies, spectrum = helpers_builders.force_fft(transform_times, signal)
                 nonnegative = frequencies >= 0
                 frequencies, spectrum = frequencies[nonnegative], spectrum[nonnegative]
-                _, laplace = helpers_builders.force_laplace(transform_times, signal, laplace_sigma + 2j * np.pi * frequencies)
+                _, laplace = helpers_builders.force_laplace(transform_times, signal, 
+                                                            laplace_sigma + 2j * np.pi * frequencies)
                 fft_ax.plot(frequencies, spectrum.real, color=color, linestyle='-', label=f'{label} (real)')
                 fft_ax.plot(frequencies, spectrum.imag, color=color, linestyle=':', label=f'{label} (imaginary)')
                 laplace_ax.plot(frequencies, np.abs(laplace), color=color, label=label)
