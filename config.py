@@ -13,10 +13,11 @@ class VariablesConfig:
 
     n_units: int = 3
     driven_node: str = "1st"
-    truss_model: str = "Trusses"  # "Trusses" or "4th Order"
-    # setup = 'experiment_full'
+    # truss_model: str = "Trusses"  # "Trusses" or "4th Order"
+    truss_model: str = "4th Order"  # "Trusses" or "4th Order"
+    setup = 'experiment_full'
     # setup = 'increasing_theta0' # Options: 'experiment_full', 'experiment_single', 'increasing_b', or 'increasing_m'
-    setup = 'increasing_b' # Options: 'experiment_full', 'experiment_single', 'increasing_b', or 'increasing_m'
+    # setup = 'increasing_b' # Options: 'experiment_full', 'experiment_single', 'increasing_b', or 'increasing_m'
 
     # 4th order, currently not in use
     k2: float = 125.0
@@ -50,12 +51,13 @@ class SupervisorConfig:
 
     # initial_phases: tuple[str, ...] = ("000", "001")
     initial_phases: tuple[str, ...] = ("000", "001", "010", "011", "100", "101", "110", "111")
+    desired_phase: str = "001"
     impulse_type: str = "single_sine_cycle"  # Options: 'single_sine_cycle' or 'gaussian'
     # amplitude = 22*10**(-3) # Peak amplitude [m], 1st paper to buckle
     # amplitude: float = 1.8e-3  # probe 2nd paper
-    amplitude: float = 2.0e-3  # my try Sep14
+    amplitude: float = 3.0e-3  # my try Sep14
     # frequency: float = 23.3  # probe 2nd paper
-    frequency: float = 30  # my try Sep14
+    frequency: float = 23.3  # my try Sep14
     gaussian_width: float | None = None
     start_time: float = 0.025  # Start-time offset [s] for both input types
     second_pulse_factor: float = 1.5
@@ -68,6 +70,11 @@ class SupervisorConfig:
     rtol: float = 1e-8
     atol: float = 1e-8
     mxstep: int = 10_000
+
+    # training params
+    T: int = 100
+    alpha: float = 0.1
+    loss_type: str = "buckle"
 
 
 @dataclass(frozen=True)

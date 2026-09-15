@@ -6,9 +6,10 @@ import jax.numpy as jnp
 import numpy as np
 
 
-def force_fft(
-    timepoints: np.ndarray, force: np.ndarray
-) -> tuple[np.ndarray, np.ndarray]:
+# -----------------------
+# Transforms
+# -----------------------
+def force_fft(timepoints: np.ndarray, force: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Return frequencies in Hz and the complex, two-sided force spectrum.
 
     Accept any finite 1-D force history (including a force difference) and
@@ -35,9 +36,7 @@ def force_fft(
     return frequencies, spectrum
 
 
-def force_laplace(
-    timepoints: np.ndarray, force: np.ndarray, s_values: np.ndarray
-) -> tuple[np.ndarray, np.ndarray]:
+def force_laplace(timepoints: np.ndarray, force: np.ndarray, s_values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Return complex s coordinates and the finite-record Laplace transform.
 
     Evaluate ``integral(force(t) * exp(-s*t), t[0], t[-1])`` using trapezoidal
@@ -67,6 +66,9 @@ def force_laplace(
     return s_values, transform
 
 
+# -------------------------
+# Experimental extractions
+# -------------------------
 def pixel_per_meter(raw_data: jnp.ndarray, reference_length: float = 86e-3) -> jnp.ndarray:
     """Return the image calibration in pixels per metre."""
     data = jnp.asarray(raw_data)
@@ -79,6 +81,9 @@ def pixel_per_meter(raw_data: jnp.ndarray, reference_length: float = 86e-3) -> j
     return n_pixels / reference_length
 
 
+# -------------------------
+# Energy potenetial
+# -------------------------
 def potential_order4(ks: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
     """Evaluate the symmetric fourth-order bistable potential."""
     k2, k3, k4 = ks
@@ -104,6 +109,9 @@ def bistable_potential_summed(params: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarra
     return jnp.sum(bistable_potential(params, x), axis=-1)
 
 
+# -------------------------
+# indexing
+# -------------------------
 def state_to_number(state: str) -> int:
     """Convert a binary system-state string to its integer value."""
     if not state or any(bit not in "01" for bit in state):
@@ -111,26 +119,18 @@ def state_to_number(state: str) -> int:
     return int(state, 2)
 
 
-def twogaussian_impulse(
-    t: jnp.ndarray,
-    amplitude: float,
-    width: float,
-    start_time: float,
-    second_pulse_factor: float = 1.5,
-) -> jnp.ndarray:
+# -------------------------
+# Impulse
+# -------------------------
+def twogaussian_impulse(t: jnp.ndarray, amplitude: float, width: float, start_time: float,
+                        second_pulse_factor: float = 1.5) -> jnp.ndarray:
     """Return two Gaussian displacement pulses."""
-    return amplitude * jnp.exp(-(t - start_time) ** 2 / width**2) + amplitude * jnp.exp(
-        -(t - second_pulse_factor * start_time) ** 2 / width**2
-    )
+    return amplitude * jnp.exp(-(t - start_time) ** 2 / width**2) + amplitude * jnp.exp(-(t - second_pulse_factor * 
+                                                                                          start_time) ** 2 / width**2)
 
 
-def gaussian_impulse(
-    t: jnp.ndarray,
-    amplitude: float,
-    start_time: float,
-    width: float | None = None,
-    frequency: float | None = None,
-) -> jnp.ndarray:
+def gaussian_impulse(t: jnp.ndarray, amplitude: float, start_time: float, width: float | None = None,
+                     frequency: float | None = None) -> jnp.ndarray:
     """Return a Gaussian displacement pulse."""
     if width is None:
         if frequency is None or frequency <= 0:
@@ -141,18 +141,15 @@ def gaussian_impulse(
     return amplitude * jnp.exp(-(t - start_time) ** 2 / width**2)
 
 
-def single_sine_cycle(
-    t: jnp.ndarray,
-    amplitude: float,
-    start_time: float,
-    frequency: float,
-) -> jnp.ndarray:
+def single_sine_cycle(t: jnp.ndarray, amplitude: float, start_time: float, frequency: float) -> jnp.ndarray:
     """Return one sinusoidal displacement cycle followed by zero displacement."""
     if frequency <= 0:
         raise ValueError("frequency must be positive.")
     phase = frequency * (t - start_time)
-    return jnp.where(
-        (phase >= 0) & (phase < 1),
-        amplitude * jnp.sin(2 * jnp.pi * phase),
-        0.0,
-    )
+    return jnp.where((phase >= 0) & (phase < 1), amplitude * jnp.sin(2 * jnp.pi * phase), 0.0,)
+
+# -------------------------
+# loss
+# -------------------------
+
+
