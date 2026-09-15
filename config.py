@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 import numpy as np
+import jax.numpy as jnp
 
 
 @dataclass(frozen=True)
@@ -32,13 +33,13 @@ class VariablesConfig:
 
     # relevant for both
     k_truss: float = 1428.0  # stiffness of one Von Mises truss arm
-    # m1 = 70*10**(-3) # m_out [kg], 1st paper
-    m1: float = 33.6e-3  # outer, 2nd paper beginning
-    # m2 = 30e-3*jnp.ones(n_units-2) # uniform physical inner masses [kg], 1st paper
-    m2: float = 3.8e-3  # inner, 2nd paper beginning
+    m1 = 70*10**(-3) # m_out [kg], 1st paper
+    # m1: float = 33.6e-3  # outer, 2nd paper beginning
+    m2 = 30e-3*jnp.ones(n_units-2) # uniform physical inner masses [kg], 1st paper
+    # m2: float = 3.8e-3  # inner, 2nd paper beginning
     increasing_m_range: tuple[float, float] = (3.8, 8.5)
-    # k1 = 125 # [N/m]  # outer, 1st paper
-    k1: float = 2 * 1020.0  # outer, 2nd paper 
+    k1 = 125 # [N/m]  # outer, 1st paper
+    # k1: float = 2 * 1020.0  # outer, 2nd paper 
     c1: float = 0.22  # damping of outer mass [kg/s], 1st paper
     c2: float = 0.1  # damping of inner mass [kg/s], 1st paper
     mu_k: float = 0.0675  # coefficient of kinetic friction
