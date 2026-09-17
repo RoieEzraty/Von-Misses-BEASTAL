@@ -9,7 +9,7 @@ import numpy as np
 # -----------------------
 # Transforms
 # -----------------------
-def force_fft(timepoints: np.ndarray, force: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def force_fft(timepoints: np.ndarray, force_dyn: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Return frequencies in Hz and the complex, two-sided force spectrum.
 
     Accept any finite 1-D force history (including a force difference) and
@@ -22,21 +22,21 @@ def force_fft(timepoints: np.ndarray, force: np.ndarray) -> tuple[np.ndarray, np
     function. This analysis helper is not intended for JAX JIT compilation.
     """
     timepoints = np.asarray(timepoints, dtype=float)
-    force = np.asarray(force)
-    if timepoints.ndim != 1 or force.ndim != 1 or timepoints.shape != force.shape or timepoints.size < 2:
+    force_dyn = np.asarray(force_dyn)
+    if timepoints.ndim != 1 or force_dyn.ndim != 1 or timepoints.shape != force_dyn.shape or timepoints.size < 2:
         raise ValueError("Timepoints and force must be matching 1-D arrays with at least two samples.")
-    if not np.all(np.isfinite(timepoints)) or not np.all(np.isfinite(force)):
+    if not np.all(np.isfinite(timepoints)) or not np.all(np.isfinite(force_dyn)):
         raise ValueError("Timepoints and force must contain only finite values.")
     steps = np.diff(timepoints)
     dt = float(np.mean(steps))
     if np.any(steps <= 0) or not np.allclose(steps, dt, rtol=1e-5, atol=0.0):
         raise ValueError("FFT requires uniformly spaced, strictly increasing timepoints.")
     frequencies = np.fft.fftfreq(timepoints.size, d=dt)
-    spectrum = dt * np.fft.fft(force) * np.exp(-2j * np.pi * frequencies * timepoints[0])
+    spectrum = dt * np.fft.fft(force_dyn) * np.exp(-2j * np.pi * frequencies * timepoints[0])
     return frequencies, spectrum
 
 
-def force_laplace(timepoints: np.ndarray, force: np.ndarray, s_values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def force_laplace(timepoints: np.ndarray, force_dyn: np.ndarray, s_values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Return complex s coordinates and the finite-record Laplace transform.
 
     Evaluate ``integral(force(t) * exp(-s*t), t[0], t[-1])`` using trapezoidal
@@ -52,17 +52,17 @@ def force_laplace(timepoints: np.ndarray, force: np.ndarray, s_values: np.ndarra
     exponential overflow. This helper is not intended for JAX JIT compilation.
     """
     timepoints = np.asarray(timepoints, dtype=float)
-    force = np.asarray(force)
+    force_dyn = np.asarray(force_dyn)
     s_values = np.asarray(s_values, dtype=complex)
-    if timepoints.ndim != 1 or force.ndim != 1 or timepoints.shape != force.shape or timepoints.size < 2:
+    if timepoints.ndim != 1 or force_dyn.ndim != 1 or timepoints.shape != force_dyn.shape or timepoints.size < 2:
         raise ValueError("Timepoints and force must be matching 1-D arrays with at least two samples.")
-    if not np.all(np.isfinite(timepoints)) or not np.all(np.isfinite(force)) or not np.all(np.isfinite(s_values)):
+    if not np.all(np.isfinite(timepoints)) or not np.all(np.isfinite(force_dyn)) or not np.all(np.isfinite(s_values)):
         raise ValueError("Timepoints, force, and s_values must contain only finite values.")
     if timepoints[0] < 0 or np.any(np.diff(timepoints) <= 0):
         raise ValueError("Laplace transform requires nonnegative, strictly increasing timepoints.")
     transform = np.empty(s_values.shape, dtype=complex)
     for index in np.ndindex(s_values.shape):
-        transform[index] = np.trapezoid(force * np.exp(-s_values[index] * timepoints), x=timepoints)
+        transform[index] = np.trapezoid(force_dyn * np.exp(-s_values[index] * timepoints), x=timepoints)
     return s_values, transform
 
 
@@ -151,5 +151,4 @@ def single_sine_cycle(t: jnp.ndarray, amplitude: float, start_time: float, frequ
 # -------------------------
 # loss
 # -------------------------
-
 

@@ -16,7 +16,7 @@ from config import ExperimentConfig
 
 
 class SupervisorClass:
-    """Hold integration times, initial phases, and the imposed displacement."""
+    """Hold integration times, initial states, and the imposed displacement."""
 
     def __init__(self, cfg: ExperimentConfig) -> None:
         # read from CFG
@@ -24,8 +24,8 @@ class SupervisorClass:
             raise ValueError("n_timepoints must be at least two.")
         if cfg.Sprvsr.duration <= 0:
             raise ValueError("duration must be positive.")
-        self.initial_phases = cfg.Sprvsr.initial_phases
-        self.desired_phase = cfg.Sprvsr.desired_phase
+        self.initial_states = cfg.Sprvsr.initial_states
+        self.desired_state = cfg.Sprvsr.desired_state
         self.impulse_type = cfg.Sprvsr.impulse_type
         self.amplitude = cfg.Sprvsr.amplitude
         self.frequency = cfg.Sprvsr.frequency
@@ -43,25 +43,24 @@ class SupervisorClass:
         if self.algorithm not in {"short", "long"}:
             raise ValueError("algorithm must be either 'short' or 'long'.")
         self.loss_type: str = cfg.Sprvsr.loss_type
-        if self.loss_type != "state":
-            raise ValueError(f"Unknown loss_type: {self.loss_type}")
+        if self.loss_type == "state":
+            self.loss_fn = self.loss_state
         self.T: int = cfg.Sprvsr.T  # training steps
         self.dLoss_do_in_t: NDArray[np.float32] = zeros((self.T, cfg.Variabs.n_units), dtype=np.float32)  # (T,B)
         self.loss_in_t: NDArray[np.float32] = zeros((self.T,), dtype=np.float32)  # (T,)
         self.update_A_in_t: NDArray[np.float32] = zeros((self.T,), dtype=np.float32)  # (T,)
         self.reset_A_in_t: NDArray[np.float32] = np.full((self.T,), np.nan, dtype=np.float32)  # (T,)
         self.positivity_in_t: NDArray[np.float32] = zeros((self.T,), dtype=np.float32)  # (T,)
-        if len(self.desired_phase) != cfg.Variabs.n_units or any(bit not in "01" for bit in self.desired_phase):
-            raise ValueError("desired_phase must contain one binary entry per physical unit.")
-        self.desired_state: NDArray[np.float32] = np.asarray([int(bit) for bit in self.desired_phase], dtype=np.float32)
+        if len(self.desired_state) != cfg.Variabs.n_units or any(bit not in "01" for bit in self.desired_state):
+            raise ValueError("desired_state must contain one binary entry per physical unit.")
+        self.desired_state: NDArray[np.float32] = np.asarray([int(bit) for bit in self.desired_state], dtype=np.float32)
         self.measured_state: NDArray[np.float32] | None = None
         self.dLoss_do: NDArray[np.float32] = zeros((cfg.Variabs.n_units,), dtype=np.float32)
         self.loss: float = 0.0
         self.update_A_nxt: float = 0.0
         self.reset_A_nxt: float | None = None
-        self.loss_fn = self.loss_state
 
-        self.impulse_data: jnp.ndarray | None = None
+        self.impulse_dyn: jnp.ndarray | None = None
 
     def program_impulse(self, impulse_type: Optional[str] = None, timepoints: Optional[jnp.ndarray] = None, amplitude: Optional[float] = None,
                         start_time: Optional[float] = None, frequency: Optional[float] = None, width: Optional[float] = None) -> jnp.ndarray:
@@ -75,21 +74,26 @@ class SupervisorClass:
 
         # user specified
         if impulse_type == "single_sine_cycle":
-            data = helpers_builders.single_sine_cycle(timepoints, amplitude, start_time, frequency)
+            impulse_dyn = helpers_builders.single_sine_cycle(timepoints, amplitude, start_time, frequency)
         elif impulse_type == "gaussian":
             width = self.gaussian_width if width is None else width
-            data = helpers_builders.gaussian_impulse(timepoints, amplitude, start_time, width=width, frequency=frequency)
+            impulse_dyn = helpers_builders.gaussian_impulse(timepoints, amplitude, start_time, width=width, frequency=frequency)
         elif impulse_type == "two_gaussian":
             width = self.gaussian_width if width is None else width
             if width is None:
                 width = 1 / (4 * jnp.sqrt(2 * jnp.log(2)) * frequency)
-            data = helpers_builders.twogaussian_impulse(timepoints, amplitude, width, start_time, self.second_pulse_factor)
+            impulse_dyn = helpers_builders.twogaussian_impulse(timepoints, amplitude, width, start_time, self.second_pulse_factor)
         else:
             raise ValueError(f"Unknown impulse_type: {impulse_type}")
 
         # save in self
-        self.impulse_data = data
-        return data
+        self.impulse_dyn = impulse_dyn
+        return impulse_dyn
+
+    def measure(self, State: "StateClass") -> None:
+        """Store the current measured state for the configured loss."""
+        if self.loss_type == "state":
+            self.measured_state = np.asarray(list(State.state), dtype=np.float32)
 
     def calc_loss(self, t: int, measured_state: NDArray[np.number] | None = None) -> float:
         """Store the squared state loss and ``dLoss_do = partial L / partial B`` at step ``t``."""
@@ -133,21 +137,22 @@ class SupervisorClass:
         """Return the index of the final nonzero entry, or ``None`` when all entries are zero."""
         nonzero_indices = np.flatnonzero(dLoss)
         return int(nonzero_indices[-1]) if nonzero_indices.size else None
+
     # ------------
     # Impulse
     # -----------
     def impulse_fn(self, time: jnp.ndarray) -> jnp.ndarray:
         """Interpolate the programmed displacement at ``time``."""
-        if self.impulse_data is None:
+        if self.impulse_dyn is None:
             raise RuntimeError("Call program_impulse() before evaluating the impulse.")
-        return jnp.interp(time, self.timepoints, self.impulse_data)
+        return jnp.interp(time, self.timepoints, self.impulse_dyn)
 
     def dimpulse_fn(self, time: float) -> jnp.ndarray:
         """Return the derivative of the interpolated displacement."""
         return grad(self.impulse_fn)(time)
 
     # ------------
-    # Loss
+    # Loss functions
     # -----------
     def loss_state(self) -> NDArray[np.float32]:
         """Return ``partial L / partial B = -2 * (desired_state - measured_state)``."""

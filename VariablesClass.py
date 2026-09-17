@@ -15,33 +15,32 @@ class VariablesClass:
     """Build all per-unit physical arrays from :mod:`config`."""
 
     def __init__(self, cfg: ExperimentConfig, plot_potential: bool = True) -> None:
-        values = cfg.Variabs
-        if values.n_units < 1:
+        if cfg.Variabs.n_units < 1:
             raise ValueError("n_units must be positive.")
-        if values.driven_node != "1st":
+        if cfg.Variabs.driven_node != "1st":
             raise NotImplementedError("Only driven_node='1st' is currently supported.")
 
 
         # read for CFG
-        self.n_physical_units = values.n_units  # what we actually call number of trusses
-        self.n_units = values.n_units + 2  # we simulate two extra units - boundaries
+        self.n_physical_units = cfg.Variabs.n_units  # what we actually call number of trusses
+        self.n_units = cfg.Variabs.n_units + 2  # we simulate two extra units - boundaries
         self.n_dofs = 2 * self.n_units  # position and velocity
-        self.driven_node = values.driven_node
-        self.truss_model = values.truss_model
-        self.setup = values.setup
-        self.m1 = values.m1
-        self.k1 = values.k1
-        self.c1 = values.c1
-        self.c2 = values.c2
-        self.mu_k = values.mu_k
-        self.beta = values.beta
+        self.driven_node = cfg.Variabs.driven_node
+        self.truss_model = cfg.Variabs.truss_model
+        self.setup = cfg.Variabs.setup
+        self.m1 = cfg.Variabs.m1
+        self.k1 = cfg.Variabs.k1
+        self.c1 = cfg.Variabs.c1
+        self.c2 = cfg.Variabs.c2
+        self.mu_k = cfg.Variabs.mu_k
+        self.beta = cfg.Variabs.beta
 
         # non-uniform mass
         if self.setup == "increasing_m":
-            first_g, last_g = values.increasing_m_range
+            first_g, last_g = cfg.Variabs.increasing_m_range
             physical_m2 = jnp.linspace(first_g, last_g, self.n_physical_units) * 1e-3
         else:
-            physical_m2 = values.m2 * jnp.ones(self.n_physical_units)
+            physical_m2 = cfg.Variabs.m2 * jnp.ones(self.n_physical_units)
 
         # get model info dedicated function
         self._get_model_info(cfg)
@@ -62,13 +61,11 @@ class VariablesClass:
 
     def _load_experimental_geometry(self, cfg: ExperimentConfig) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         """Load ``L``, ``theta0``, and ``b`` from the experimental image data."""
-        values = cfg.Variabs
-
         # allocated data directory inside this directory
-        data_dir = Path(values.experimental_data_dir)
+        data_dir = Path(cfg.Variabs.experimental_data_dir)
 
         # load experimental geometry and pixels to metres conversion
-        pixels_per_metre = helpers_builders.pixel_per_meter(jnp.load(data_dir / "px_mm_conversion.npy"), values.reference_length)
+        pixels_per_metre = helpers_builders.pixel_per_meter(jnp.load(data_dir / "px_mm_conversion.npy"), cfg.Variabs.reference_length)
         length_points = jnp.load(data_dir / "data_for_L_values.npy") / pixels_per_metre
         theta_points = jnp.load(data_dir / "data_for_theta_values.npy") / pixels_per_metre
         b_points = jnp.load(data_dir / "data_for_b_value.npy") / pixels_per_metre
@@ -87,11 +84,10 @@ class VariablesClass:
 
     def _get_model_info(self, cfg: ExperimentConfig) -> None:
         """Select the potential and construct its per-unit parameters."""
-        values = cfg.Variabs
         if self.truss_model == "4th Order":
             self.potential_fn = helpers_builders.potential_order4
-            self.k2 = values.k2
-            self.k4 = values.k4
+            self.k2 = cfg.Variabs.k2
+            self.k4 = cfg.Variabs.k4
             self.k3 = 3 * jnp.sqrt(self.k2 * self.k4 / 2)
             self.k_fit4 = jnp.array([self.k2, self.k3, self.k4])
             equilibrium2 = self.k3 / (2 * self.k4) + jnp.sqrt((self.k3 / (2 * self.k4)) ** 2 - self.k2 / self.k4)
@@ -116,12 +112,12 @@ class VariablesClass:
             length = jnp.full_like(length, length[0])
             theta0 = jnp.full_like(theta0, theta0[0])
             if self.setup == "increasing_b":
-                b = jnp.asarray(values.increasing_b_mm) * 1e-3
+                b = jnp.asarray(cfg.Variabs.increasing_b_mm) * 1e-3
             else:
                 b = jnp.full_like(b, b[0])
             if self.setup == "increasing_theta0":
-                rises = jnp.asarray(values.increasing_theta0_rise_mm)
-                theta0 = jnp.arctan(rises / values.increasing_theta0_span_mm)
+                rises = jnp.asarray(cfg.Variabs.increasing_theta0_rise_mm)
+                theta0 = jnp.arctan(rises / cfg.Variabs.increasing_theta0_span_mm)
         else:
             raise ValueError(f"Unknown setup: {self.setup}")
 
@@ -131,7 +127,7 @@ class VariablesClass:
         self.b = b
 
         # calculate equilibria
-        physical_params = jnp.column_stack((2 * values.k_truss * jnp.ones(self.n_physical_units), length, theta0, b))
+        physical_params = jnp.column_stack((2 * cfg.Variabs.k_truss * jnp.ones(self.n_physical_units), length, theta0, b))
         left_boundary = jnp.concatenate((jnp.zeros(1), physical_params[0, 1:]))
         right_boundary = jnp.concatenate((jnp.zeros(1), physical_params[-1, 1:]))
         self.bistable_potential_params = jnp.vstack((left_boundary, physical_params, right_boundary))

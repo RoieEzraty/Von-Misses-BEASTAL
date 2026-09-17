@@ -50,9 +50,9 @@ class VariablesConfig:
 class SupervisorConfig:
     """Initial-state, input-pulse, and integration parameters."""
 
-    # initial_phases: tuple[str, ...] = ("000", "001")
-    initial_phases: tuple[str, ...] = ("000", "001", "010", "011", "100", "101", "110", "111")
-    desired_phase: str = "001"
+    # initial_states: tuple[str, ...] = ("000", "001")
+    initial_states: tuple[str, ...] = ("000", "001", "010", "011", "100", "101", "110", "111")
+    desired_state: str = "001"
     impulse_type: str = "single_sine_cycle"  # Options: 'single_sine_cycle' or 'gaussian'
     # amplitude = 22*10**(-3) # Peak amplitude [m], 1st paper to buckle
     # amplitude: float = 1.8e-3  # probe 2nd paper
@@ -75,14 +75,15 @@ class SupervisorConfig:
     # training params, not relevant for Nathan
     T: int = 100
     alpha: float = 0.1
-    loss_type: str = "buckle"
+    algorithm: str = "short"  # Options: "short" or "long" (resetting)
+    loss_type: str = "state"
 
 
 @dataclass(frozen=True)
 class OutputConfig:
     """State classification and plotting choices."""
 
-    state_threshold: float = 15e-3
+    state_identification_threshold: float = 15e-3
     force_arrival_threshold_fraction: float = 0.05
     plot_potential: bool = True
     plot_responses: bool = True
