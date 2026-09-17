@@ -112,11 +112,16 @@ def bistable_potential_summed(params: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarra
 # -------------------------
 # indexing
 # -------------------------
-def state_to_number(state: str) -> int:
-    """Convert a binary system-state string to its integer value."""
-    if not state or any(bit not in "01" for bit in state):
-        raise ValueError("state must be a non-empty binary string, e.g. '001'.")
-    return int(state, 2)
+def state_to_number(state: str | np.ndarray) -> int:
+    """Convert a binary system-state string or array to its integer value."""
+    if isinstance(state, str):
+        if not state or any(bit not in "01" for bit in state):
+            raise ValueError("state must contain only binary entries.")
+        return int(state, 2)
+    state = np.asarray(state).reshape(-1)
+    if state.size == 0 or not np.all(np.isin(state, (0, 1))):
+        raise ValueError("state must contain only binary entries.")
+    return int("".join(state.astype(int).astype(str)), 2)
 
 
 # -------------------------

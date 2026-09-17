@@ -29,6 +29,9 @@ class StateClass:
         self.state_in_t = np.zeros((cfg.Sprvsr.T, Variabs.n_physical_units), dtype=np.float32)
         self.state_identification_threshold = cfg.Output.state_identification_threshold
 
+        # Store parameter arrays for unconstrained degrees of freedom. I could later change what's clamped and what's not
+        self.get_free_dof_parameters(Variabs)
+
     def get_free_dof_parameters(self, Variabs: "VariablesClass") -> None:
         """Store parameter arrays for unconstrained degrees of freedom.
         It is its own function just in case I want to change what's clamped and what's not"""
@@ -47,9 +50,9 @@ class StateClass:
         # state-defined dynamics
         if len(input_state) != Variabs.n_physical_units or any(bit not in "01" for bit in input_state):
             raise ValueError("input_state must be a binary string with one bit per physical unit.")
+        state = np.fromiter((int(bit) for bit in input_state), dtype=np.int8)
         self.m1_state = jnp.vstack((jnp.full(Variabs.n_units, 1e-11), jnp.zeros(Variabs.n_units)))
-        physical_displacements = jnp.where(jnp.asarray([bit == "1" for bit in input_state]), Variabs.equilibrium2,
-                                           Variabs.equilibrium1)
+        physical_displacements = jnp.where(jnp.asarray(state, dtype=bool), Variabs.equilibrium2, Variabs.equilibrium1)
         m2_displacement = jnp.concatenate((jnp.zeros(1), physical_displacements, jnp.zeros(1)))
         self.m2_state = jnp.vstack((m2_displacement, jnp.zeros(Variabs.n_units)))
 
@@ -65,8 +68,8 @@ class StateClass:
         # u and delta
         self.u = self.dyn_global[0, 0::2][1:-1]
         self.delta = self.dyn_global[0, 1::2][1:-1] - self.u
-        self.state = input_state
-        return self.dyn_local, self.dyn_global
+        self.state = state
+        # return self.dyn_local, self.dyn_global
 
     def update_from_dyn(self, final_free_dyn: jnp.ndarray, final_global_dyn: jnp.ndarray) -> None:
         """Update the current dynamics and bitwise state from the end of a simulation."""
@@ -78,15 +81,15 @@ class StateClass:
         self.delta = final_global_dyn[2, 1:-1] - self.u
         self.state = self.get_system_state(self.delta, self.state_identification_threshold)
 
-    def get_system_state(self, vn_minus_un: jnp.ndarray, threshold: float = 15e-3) -> str:
-        """Return a binary state string from physical relative displacements."""
+    def get_system_state(self, vn_minus_un: jnp.ndarray, threshold: float = 15e-3) -> np.ndarray:
+        """Return a binary integer array from physical relative displacements."""
         relative_displacements = jnp.asarray(vn_minus_un).reshape(-1)
-        return "".join("1" if float(value) > threshold else "0" for value in relative_displacements)
+        return np.asarray(relative_displacements > threshold, dtype=np.int8)
 
     def measure_state(self, t: int) -> np.ndarray:
         """Measure and store the system state at training step ``t``."""
         self.state = self.get_system_state(self.delta, self.state_identification_threshold)
-        self.state_in_t[t] = np.asarray(list(self.state), dtype=np.float32)
+        self.state_in_t[t] = self.state
         return self.state_in_t[t]
 
     @staticmethod

@@ -3,6 +3,8 @@ from __future__ import annotations
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import BoundaryNorm, ListedColormap
+from matplotlib.ticker import MaxNLocator
 
 plt.rcParams["pdf.fonttype"] = 42
 
@@ -24,6 +26,50 @@ def plot_impulse(timepoints, impulse_dyn):
 # -------------------------------------------------
 # Importants
 # -------------------------------------------------
+def plot_training(update_A_in_t: np.ndarray, state_in_t: np.ndarray, loss_in_t: np.ndarray, *,
+                  sup_title: str | None = None, figsize: tuple[float, float] = (8, 7)) -> tuple[plt.Figure, np.ndarray]:
+    """Plot pulse amplitude, binary system state, and absolute loss over training steps.
+
+    ``state_in_t`` must have shape ``(T, n_physical_units)``. The pulse
+    amplitudes are supplied in metres and displayed in millimetres. Return the
+    figure and the three axes, ordered from top to bottom.
+    """
+    amplitudes = np.asarray(update_A_in_t).reshape(-1)
+    states = np.asarray(state_in_t)
+    losses = np.asarray(loss_in_t).reshape(-1)
+    if states.ndim != 2:
+        raise ValueError("state_in_t must be a 2D array with shape (T, n_physical_units).")
+    if not (amplitudes.size == states.shape[0] == losses.size):
+        raise ValueError("update_A_in_t, state_in_t, and loss_in_t must contain the same number of training steps.")
+    if amplitudes.size == 0 or states.shape[1] == 0:
+        raise ValueError("Training histories must contain at least one step and one physical unit.")
+
+    training_steps = np.arange(amplitudes.size)
+    step_edges = np.arange(amplitudes.size + 1) - 0.5
+    unit_edges = np.arange(states.shape[1] + 1) - 0.5
+    state_cmap = ListedColormap([colors_lst[1], colors_lst[2]], name="binary_state")
+    state_norm = BoundaryNorm([-0.5, 0.5, 1.5], state_cmap.N)
+    fig, axes = plt.subplots(3, 1, figsize=figsize, sharex=True, height_ratios=(1, 1.4, 1))
+    amplitude_ax, state_ax, loss_ax = axes
+
+    amplitude_ax.plot(training_steps, amplitudes * 1e3, color=colors_lst[0], marker="o", markersize=3)
+    state_map = state_ax.pcolormesh(step_edges, unit_edges, states.T, cmap=state_cmap, norm=state_norm, shading="flat")
+    loss_ax.plot(training_steps, np.abs(losses), color=red, marker="o", markersize=3)
+    fig.colorbar(state_map, ax=state_ax, ticks=(0, 1), pad=0.01, label="State")
+
+    amplitude_ax.set(ylabel="Pulse amplitude (mm)", title="Training Pulse Amplitude")
+    state_ax.set(ylabel="Physical unit, $n$", title="System State", yticks=np.arange(states.shape[1]))
+    loss_ax.set(xlabel="Training step, $t$", ylabel=r"$|L|$", title="Absolute Loss")
+    for ax in axes:
+        ax.grid(False)
+        ax.set_xlim(-0.5, amplitudes.size - 0.5)
+    loss_ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    if sup_title is not None:
+        fig.suptitle(sup_title)
+    fig.tight_layout()
+    return fig, axes
+
+
 # Define plotting function
 def plot_response(
     u_dyn: np.ndarray,

@@ -52,7 +52,7 @@ class SupervisorConfig:
 
     # initial_states: tuple[str, ...] = ("000", "001")
     initial_states: tuple[str, ...] = ("000", "001", "010", "011", "100", "101", "110", "111")
-    desired_state: str = "001"
+    desired_state: str = "101"
     impulse_type: str = "single_sine_cycle"  # Options: 'single_sine_cycle' or 'gaussian'
     # amplitude = 22*10**(-3) # Peak amplitude [m], 1st paper to buckle
     # amplitude: float = 1.8e-3  # probe 2nd paper
@@ -73,10 +73,15 @@ class SupervisorConfig:
     mxstep: int = 10_000
 
     # training params, not relevant for Nathan
-    T: int = 100
-    alpha: float = 0.1
-    algorithm: str = "short"  # Options: "short" or "long" (resetting)
+    T: int = 64
+    alpha: float = 2.0
+    # algorithm: str = "short"  # Options: "short" or "long" (resetting), or "random" for random attempt
+    algorithm: str = "random"  # Options: "short" or "long" (resetting), or "random" for random attempt
+    if algorithm == "random":
+        rand_key_dataset = 42
     loss_type: str = "state"
+    lo_A: float = 10.0e-3  # [mm]
+    hi_A: float = 30.0e-3  # [mm]
 
 
 @dataclass(frozen=True)
