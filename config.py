@@ -12,7 +12,7 @@ import jax.numpy as jnp
 class VariablesConfig:
     """Physical and geometric parameters."""
 
-    n_units: int = 5  # number of Von Mises trusses
+    n_units: int = 3  # number of Von Mises trusses
     driven_node: str = "1st"  # impulse given to right "1st" or left "last" sides
     truss_model: str = "Trusses"  # "Trusses" (account for tangent angle) or "4th Order" (polynomial approximation with 2 wells)
     # truss_model: str = "4th Order"  # "Trusses" or "4th Order"
@@ -29,6 +29,9 @@ class VariablesConfig:
     increasing_b_mm: tuple[float, ...] = (8.3, 8.7, 9.3)  # b parameters for each truss increasing
     increasing_theta0_rise_mm: tuple[float, ...] = (8.3, 10.7, 12.3)  # rest angle for each truss increasing 
     increasing_theta0_span_mm: float = 40.0
+    k_c: float = 1e6  # contact stiffness [N/m]
+    # k_c: float = 0  # no contact stiffness [N/m]
+    eps: float = 2e-3  # clearance beyond the second equilibrium before contact [m]
 
     # relevant for both
     k_truss: float = 1428.0  # stiffness of one Von Mises truss arm

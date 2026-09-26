@@ -59,10 +59,12 @@ class VariablesClass:
     k3: float  # 3*sqrt(k2*k4/2).
     k4: float
     k_fit4: jnp.ndarray  # [k2, k3, k4]; used indirectly in the packed potential parameters.
+    k_c: float  # Contact stiffness for the truss model.
+    eps: float  # Clearance beyond the second equilibrium before contact begins.
 
     # Potential and equilibria shared by both model choices.
     potential_fn: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]  # Direct: evaluated for local energy at every integration step.
-    bistable_potential_params: jnp.ndarray  # Indirect: packed into stiffness_vals; truss rows are [2*k_truss, L, theta0, b].
+    bistable_potential_params: jnp.ndarray  # Indirect: packed into stiffness_vals; truss rows are [2*k_truss, L, theta0, b, k_c, eps].
     equilibrium1: jnp.ndarray  # Indirect: StateClass uses it only to initialize state-0 displacements.
     equilibrium2: jnp.ndarray  # Indirect: StateClass uses it only to initialize state-1 displacements; equals 2*a0 for trusses.
     stiffness_vals: jnp.ndarray  # Direct: rows contain [k1, *bistable_potential_params].
@@ -96,6 +98,8 @@ class VariablesClass:
         self.c2 = cfg.Variabs.c2
         self.mu_k = cfg.Variabs.mu_k
         self.beta = cfg.Variabs.beta
+        self.k_c = cfg.Variabs.k_c
+        self.eps = cfg.Variabs.eps
 
         # non-uniform mass
         if self.setup == "increasing_m":
@@ -119,7 +123,7 @@ class VariablesClass:
         self.mu_k_arr = self.mu_k * jnp.ones(self.n_units)
 
         if plot_potential:
-            plot_funcs.plot_potential(self)
+            plot_funcs.plot_potential(self.bistable_potential_params[1:-1], self.truss_model)
 
     def _load_experimental_geometry(self, cfg: ExperimentConfig) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         """Load ``L``, ``theta0``, and ``b`` from the experimental image data."""
@@ -194,9 +198,9 @@ class VariablesClass:
         self.b = b
 
         # calculate equilibria
-        physical_params = jnp.column_stack((2 * cfg.Variabs.k_truss * jnp.ones(self.n_physical_units), length, theta0, b))
-        left_boundary = jnp.concatenate((jnp.zeros(1), physical_params[0, 1:]))
-        right_boundary = jnp.concatenate((jnp.zeros(1), physical_params[-1, 1:]))
+        physical_params = jnp.column_stack((2 * cfg.Variabs.k_truss * jnp.ones(self.n_physical_units), length, theta0, b, self.k_c * jnp.ones(self.n_physical_units), self.eps * jnp.ones(self.n_physical_units)))
+        left_boundary = physical_params[0].at[jnp.array([0, 4])].set(0)
+        right_boundary = physical_params[-1].at[jnp.array([0, 4])].set(0)
         self.bistable_potential_params = jnp.vstack((left_boundary, physical_params, right_boundary))
         a0 = (length) * jnp.tan(theta0)
         self.equilibrium1 = jnp.zeros_like(a0)

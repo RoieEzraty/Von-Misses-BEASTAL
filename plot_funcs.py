@@ -197,45 +197,25 @@ def plot_laplace_fourier(F_dyn: np.ndarray, timepoints: np.ndarray, *, laplace_s
 # -------------------------------------------------
 # Potential
 # -------------------------------------------------
-def plot_potential_O4(k_fit4, x_min, x_max):
-    """
-    Plot the bistable potential energy landscape.
-
-    Parameters
-    ----------
-    k_fit4 : array-like
-        Coefficients for the 4th order potential.
-    x_min : float
-        Minimum displacement value for the inner mass.
-    x_max : float
-        Maximum displacement value for the inner mass.
-    """
-    d1 = 0  # displacement of outer mass
-    d2 = jnp.linspace(x_min, x_max, 1000) # displacement of inner mass
-    fitted_energy4 = helpers_builders.potential_order4(k_fit4, d2)
-
-    # Visualize the energy landscape
-    plt.figure(figsize=[4, 3])
-    plt.plot(d2 * 10**3, fitted_energy4 * 10**3, 'k')
-    plt.xlabel('Displacement (mm)')
-    plt.ylabel('Energy (mJ)')
-    plt.title('Bistable Energy Landscape')
-    plt.tight_layout()
-
-
-def plot_potential(variables, x_min=-0.005, x_max=0.031):
-    """Plot the configured physical-unit potential energy landscapes."""
+def plot_potential(potential_params: jnp.ndarray, truss_model: str, x_min: float = -0.005, x_max: float = 0.031):
+    """Plot fourth-order or Von Mises potentials from packed parameter rows."""
+    potential_params = jnp.asarray(potential_params)
+    if potential_params.ndim == 1:
+        potential_params = potential_params[None, :]
+    if potential_params.ndim != 2:
+        raise ValueError("potential_params must contain one row per potential.")
     displacement = jnp.linspace(x_min, x_max, 1000)
     fig, ax = plt.subplots(figsize=(4, 3))
-    if variables.truss_model == "4th Order":
-        energy = helpers_builders.potential_order4(variables.k_fit4, displacement)
-        ax.plot(displacement * 1e3, energy * 1e3, color="k")
+    if truss_model == "4th Order":
+        energy = helpers_builders.potential_order4(potential_params.T, displacement[:, None])
+    elif truss_model == "Trusses":
+        energy = helpers_builders.bistable_potential(potential_params.T, displacement[:, None])
     else:
-        params = variables.bistable_potential_params[1:-1].T
-        energy = helpers_builders.bistable_potential(params, displacement[:, None])
-        ax.plot(displacement * 1e3, energy * 1e3)
+        raise ValueError(f"Unknown potential model: {truss_model}")
+    ax.plot(displacement * 1e3, energy * 1e3)
     ax.set(xlabel="Displacement (mm)", ylabel="Energy (mJ)", title="Bistable Energy Landscape")
     fig.tight_layout()
+    ax.set_ylim([-0.5, 2.5])
     return fig, ax
 
 
