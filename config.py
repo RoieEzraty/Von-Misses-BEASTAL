@@ -78,10 +78,10 @@ class SupervisorConfig:
     # algorithm: str = "short"  # Options: "short" or "long" (resetting), or "random" for random attempt
     algorithm: str = "random"  # Options: "short" or "long" (resetting), or "random" for random attempt
     if algorithm == "random":
-        rand_key_dataset = 42
+        rand_key_dataset = 33
     loss_type: str = "state"
     lo_A: float = 10.0e-3  # [mm]
-    hi_A: float = 30.0e-3  # [mm]
+    hi_A: float = 40.0e-3  # [mm]
 
 
 @dataclass(frozen=True)

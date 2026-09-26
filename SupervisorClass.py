@@ -157,7 +157,9 @@ class SupervisorClass:
         dLoss_last_prev = self._last_nonzero(dLoss_prev)
         dLoss_last_curr = self._last_nonzero(dLoss_do)
         abs_A_prev = np.abs(A_prev)
-        update_A_nxt = dLoss_last_curr * (dLoss_last_prev * A_prev + self.alpha * self.A_norm)
+        update_A_nxt = dLoss_last_curr * (dLoss_last_prev * A_prev + self.alpha * self.A_norm)  # Best Sep11?
+        # update_A_nxt = (dLoss_last_curr + dLoss_last_prev)/2 * A_prev + self.alpha * self.A_norm * dLoss_last_prev  # new attempt Sep23
+        # update_A_nxt = dLoss_last_curr * (dLoss_last_prev * A_prev + self.alpha * self.A_norm * dLoss_last_curr)  # shitty Sep23
         return None, update_A_nxt
 
     def BEASTAL_long(self, t, dLoss_do, dLoss_prev, A_prev):
