@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import jax.numpy as jnp
@@ -12,7 +13,69 @@ from config import ExperimentConfig
 
 
 class VariablesClass:
-    """Build all per-unit physical arrays from :mod:`config`."""
+    """Relevant physical parameters used by the simulation.
+
+    equilibria are ``delta=0`` and ``delta=2*a0``.
+    ``L`` and ``theta0`` affect both the saved equilibria and the independently packed
+    potential parameters.
+
+    "Direct" below means :class:`EquilibriumClass` reads the attribute during
+    integration. "Indirect" means it is copied into ``StateClass`` or a packed
+    array that integration reads. "Metadata" is retained for configuration,
+    inspection, validation, or plotting and is not itself read by integration.
+    """
+
+    # Sizes and model selection (metadata, except sizes are also used indirectly by StateClass).
+    n_physical_units: int  # Number of physical trusses, n.
+    n_units: int  # n + 2, including the driven and fixed boundary units.
+    n_dofs: int  # 2*n_units mechanical coordinates (outer and inner mass); indirect.
+    driven_node: str  # translating state. Validated during construction; metadata afterwards.
+    truss_model: str  # 'trusses' or '4th order'
+    setup: str  # Selects how per-truss parameters are constructed.
+                # 'experiment_full' - 3 trusses from Audrey's data
+                # 'experiment_1st_mass' - identical trusses as the 1st mass from Audrey's, 
+                # 'experiment_single' - Don't even remember
+                # 'increasing_b', 'increasing_theta0', or 'increasing_m' - 
+                # different value for each truss
+
+    # Scalar material parameters copied from config; their arrays below are used in integration.
+    m1: float  # mass of truss outer frame
+    k1: float  # Direct: coupling stiffness and reported endpoint forces.
+    c1: float  # damping of oscillation - outer mass
+    c2: float  # damping of oscillation - inner mass
+    mu_k: float  # kinetic friction
+    beta: float  # Direct: tanh smoothing of kinetic friction in EquilibriumClass.rhs.
+
+    # Truss geometry (defined only for truss_model="Trusses").
+    L: jnp.ndarray  # Spring length. Metadata copy; used indirectly through bistable_potential_params and a0.
+    theta0: jnp.ndarray  # Rest angle. Metadata copy; used indirectly through bistable_potential_params and a0.
+    # ``b`` cancels out since potential reduces to
+    # ``k_eff/2 * (L/cos(theta0) - sqrt((a0-x)**2 + L**2))**2`` -> 
+    b: jnp.ndarray  # End offset. Metadata copy; packed into the potential but cancels algebraically at present.
+    a0: jnp.ndarray  # horizontal rest deflection from truss center
+
+    # Fourth-order coefficients (defined only for truss_model="4th Order").
+    k2: float
+    k3: float  # 3*sqrt(k2*k4/2).
+    k4: float
+    k_fit4: jnp.ndarray  # [k2, k3, k4]; used indirectly in the packed potential parameters.
+
+    # Potential and equilibria shared by both model choices.
+    potential_fn: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]  # Direct: evaluated for local energy at every integration step.
+    bistable_potential_params: jnp.ndarray  # Indirect: packed into stiffness_vals; truss rows are [2*k_truss, L, theta0, b].
+    equilibrium1: jnp.ndarray  # Indirect: StateClass uses it only to initialize state-0 displacements.
+    equilibrium2: jnp.ndarray  # Indirect: StateClass uses it only to initialize state-1 displacements; equals 2*a0 for trusses.
+    stiffness_vals: jnp.ndarray  # Direct: rows contain [k1, *bistable_potential_params].
+
+    # Boundary indices and full arrays; StateClass extracts free entries before integration.
+    m1_constrained_unit_ids: jnp.ndarray  # Indirect: outer-mass boundary indices.
+    m2_constrained_unit_ids: jnp.ndarray  # Indirect: inner-mass boundary indices.
+    constrained_unit_ids: tuple[jnp.ndarray, jnp.ndarray]  # Convenience metadata; not currently read elsewhere.
+    m1_arr: jnp.ndarray  # Indirect: outer masses passed to EquilibriumClass.rhs through StateClass.
+    m2_arr: jnp.ndarray  # Indirect: inner masses passed to EquilibriumClass.rhs through StateClass.
+    c1_arr: jnp.ndarray  # Indirect: outer damping passed through StateClass.
+    c2_arr: jnp.ndarray  # Indirect: internal damping passed through StateClass.
+    mu_k_arr: jnp.ndarray  # Indirect: kinetic-friction coefficients passed through StateClass.
 
     def __init__(self, cfg: ExperimentConfig, plot_potential: bool = True) -> None:
         if cfg.Variabs.n_units < 1:
@@ -20,11 +83,10 @@ class VariablesClass:
         if cfg.Variabs.driven_node != "1st":
             raise NotImplementedError("Only driven_node='1st' is currently supported.")
 
-
         # read for CFG
         self.n_physical_units = cfg.Variabs.n_units  # what we actually call number of trusses
         self.n_units = cfg.Variabs.n_units + 2  # we simulate two extra units - boundaries
-        self.n_dofs = 2 * self.n_units  # position and velocity
+        self.n_dofs = 2 * self.n_units  # outer- and inner-mass coordinates; position and velocity are separate state rows
         self.driven_node = cfg.Variabs.driven_node
         self.truss_model = cfg.Variabs.truss_model
         self.setup = cfg.Variabs.setup
@@ -77,9 +139,8 @@ class VariablesClass:
         b_value = jnp.linalg.norm(b_points[0] - b_points[1])
         b = jnp.full_like(length, b_value)
 
-        expected_shape = (self.n_physical_units,)
-        if length.shape != expected_shape or theta0.shape != expected_shape:
-            raise ValueError("Experimental geometry must contain one L and theta0 value per physical unit.")
+        if length.ndim != 1 or theta0.ndim != 1 or b.ndim != 1 or not length.size or length.shape != theta0.shape or length.shape != b.shape:
+            raise ValueError("Experimental geometry must contain matching, nonempty L, theta0, and b arrays.")
         return length, theta0, b
 
     def _get_model_info(self, cfg: ExperimentConfig) -> None:
@@ -107,7 +168,13 @@ class VariablesClass:
 
         # the setup decides how to use the parameters
         if self.setup == "experiment_full":
-            pass
+            expected_shape = (self.n_physical_units,)
+            if length.shape != expected_shape:
+                raise ValueError("The experiment_full setup requires one experimental truss per physical unit.")
+        elif self.setup == "experiment_1st_mass":
+            length = jnp.full((self.n_physical_units,), length[0])
+            theta0 = jnp.full((self.n_physical_units,), theta0[0])
+            b = jnp.full((self.n_physical_units,), b[0])
         elif self.setup in {"experiment_single", "increasing_b", "increasing_m", "increasing_theta0"}:
             length = jnp.full_like(length, length[0])
             theta0 = jnp.full_like(theta0, theta0[0])
@@ -131,7 +198,6 @@ class VariablesClass:
         left_boundary = jnp.concatenate((jnp.zeros(1), physical_params[0, 1:]))
         right_boundary = jnp.concatenate((jnp.zeros(1), physical_params[-1, 1:]))
         self.bistable_potential_params = jnp.vstack((left_boundary, physical_params, right_boundary))
-        rest_length = length / jnp.cos(theta0) - 2 * b
-        a0 = (rest_length + 2 * b) * jnp.sin(theta0)
+        a0 = (length) * jnp.tan(theta0)
         self.equilibrium1 = jnp.zeros_like(a0)
         self.equilibrium2 = 2 * a0

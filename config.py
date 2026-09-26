@@ -12,13 +12,12 @@ import jax.numpy as jnp
 class VariablesConfig:
     """Physical and geometric parameters."""
 
-    n_units: int = 3  # number of Von Mises trusses
+    n_units: int = 5  # number of Von Mises trusses
     driven_node: str = "1st"  # impulse given to right "1st" or left "last" sides
     truss_model: str = "Trusses"  # "Trusses" (account for tangent angle) or "4th Order" (polynomial approximation with 2 wells)
     # truss_model: str = "4th Order"  # "Trusses" or "4th Order"
-    setup = 'experiment_full'  # Audrey's parameters
-    # setup = 'increasing_theta0' # Options: 'experiment_full', 'experiment_single', 'increasing_b', or 'increasing_m'
-    # setup = 'increasing_b' # Options: 'experiment_full', 'experiment_single', 'increasing_b', or 'increasing_m'
+    setup = 'experiment_1st_mass'  # repeat Audrey's first truss n_units times
+    # Options: 'experiment_full', 'experiment_1st_mass', 'experiment_single', 'increasing_b', 'increasing_theta0', or 'increasing_m'
 
     # parameters for 4th order polynomial, currently not in use
     k2: float = 125.0
@@ -35,7 +34,7 @@ class VariablesConfig:
     k_truss: float = 1428.0  # stiffness of one Von Mises truss arm
     m1 = 70*10**(-3) # m_out [kg], 1st paper
     # m1: float = 33.6e-3  # outer, 2nd paper beginning
-    m2 = 30e-3*jnp.ones(n_units-2) # uniform physical inner masses [kg], 1st paper
+    m2 = 30e-3 # uniform physical inner masses [kg], 1st paper
     # m2: float = 3.8e-3  # inner, 2nd paper beginning
     increasing_m_range: tuple[float, float] = (3.8, 8.5)
     k1 = 125 # [N/m]  # outer, 1st paper
@@ -51,8 +50,10 @@ class SupervisorConfig:
     """Initial-state, input-pulse, and integration parameters."""
 
     # initial_states: tuple[str, ...] = ("000", "001")
-    initial_states: tuple[str, ...] = ("000", "001", "010", "011", "100", "101", "110", "111")
-    desired_state: str = "101"
+    # initial_states: tuple[str, ...] = ("000", "001", "010", "011", "100", "101", "110", "111")
+    initial_states: tuple[str, ...] = ("0000", "0001")
+    # desired_state: str = "101"
+    desired_state: str = "1011"
     impulse_type: str = "single_sine_cycle"  # Options: 'single_sine_cycle' or 'gaussian'
     # amplitude = 22*10**(-3) # Peak amplitude [m], 1st paper to buckle
     # amplitude: float = 1.8e-3  # probe 2nd paper
@@ -81,7 +82,7 @@ class SupervisorConfig:
         rand_key_dataset = 33
     loss_type: str = "state"
     lo_A: float = 10.0e-3  # [mm]
-    hi_A: float = 40.0e-3  # [mm]
+    hi_A: float = 45.0e-3  # [mm]
 
 
 @dataclass(frozen=True)
