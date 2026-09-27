@@ -17,7 +17,8 @@ class VariablesConfig:
     truss_model: str = "Trusses"  # "Trusses" (account for tangent angle) or "4th Order" (polynomial approximation with 2 wells)
     # truss_model: str = "4th Order"  # "Trusses" or "4th Order"
     setup = 'experiment_1st_mass'  # repeat Audrey's first truss n_units times
-    # Options: 'experiment_full', 'experiment_1st_mass', 'experiment_single', 'increasing_b', 'increasing_theta0', or 'increasing_m'
+                                     # Options: 'experiment_full', 'experiment_1st_mass', 'experiment_single', 'increasing_b', 'increasing_theta0', or 'increasing_m'
+    # setup = 'experiment_full'
 
     # parameters for 4th order polynomial, currently not in use
     k2: float = 125.0
@@ -31,17 +32,17 @@ class VariablesConfig:
     increasing_theta0_span_mm: float = 40.0
     k_c: float = 1e6  # contact stiffness [N/m]
     # k_c: float = 0  # no contact stiffness [N/m]
-    eps: float = 2e-3  # clearance beyond the second equilibrium before contact [m]
+    eps: float = 1e-3  # clearance beyond the second equilibrium before contact [m]
 
     # relevant for both
     k_truss: float = 1428.0  # stiffness of one Von Mises truss arm
-    m1 = 70*10**(-3) # m_out [kg], 1st paper
-    # m1: float = 33.6e-3  # outer, 2nd paper beginning
-    m2 = 30e-3 # uniform physical inner masses [kg], 1st paper
-    # m2: float = 3.8e-3  # inner, 2nd paper beginning
+    # m1 = 70*10**(-3) # m_out [kg], 1st paper
+    m1: float = 33.6e-3  # outer, 2nd paper beginning
+    # m2 = 30e-3 # uniform physical inner masses [kg], 1st paper
+    m2: float = 3.8e-3  # inner, 2nd paper beginning
     increasing_m_range: tuple[float, float] = (3.8, 8.5)
-    k1 = 125 # [N/m]  # outer, 1st paper
-    # k1: float = 2 * 1020.0  # outer, 2nd paper 
+    # k1 = 125 # [N/m]  # outer, 1st paper
+    k1: float = 2 * 1020.0  # outer, 2nd paper 
     c1: float = 0.22  # damping of outer mass [kg/s], 1st paper
     c2: float = 0.1  # damping of inner mass [kg/s], 1st paper
     mu_k: float = 0.0675  # coefficient of kinetic friction
@@ -59,8 +60,8 @@ class SupervisorConfig:
     desired_state: str = "1011"
     impulse_type: str = "single_sine_cycle"  # Options: 'single_sine_cycle' or 'gaussian'
     # amplitude = 22*10**(-3) # Peak amplitude [m], 1st paper to buckle
-    # amplitude: float = 1.8e-3  # probe 2nd paper
-    amplitude: float = 3.0e-3  # my try Sep14
+    amplitude: float = 1.8e-3  # probe 2nd paper
+    # amplitude: float = 3.0e-3  # my try Sep14
     # frequency: float = 23.3  # probe 2nd paper
     frequency: float = 23.3  # my try Sep14
     gaussian_width: float | None = None
@@ -69,7 +70,7 @@ class SupervisorConfig:
     n_timepoints: int = 1000  # for equilibrium integration
     # f_cutoff: int = 100  # [Hz]
     # duration: float = n_timepoints / (4*f_cutoff)
-    duration = 0.8
+    duration = 0.4
 
     # for ODE solution, not in use, should I omit those?
     rtol: float = 1e-8

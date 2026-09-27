@@ -184,7 +184,9 @@ def plot_laplace_fourier(F_dyn: np.ndarray, timepoints: np.ndarray, *, laplace_s
     laplace_ax.set_title(fr'Endpoint Force Laplace ($\sigma={laplace_sigma:g}$ s$^{{-1}}$)', fontsize=12)
     for ax in (fft_ax, laplace_ax):
         ax.set_xlabel('Frequency (Hz)', fontsize=12)
-        ax.set_xlim(0, float(frequencies[-1]) / 2 if frequencies[-1] > 0 else 1.0)
+        ax.set_xlim(0, float(frequencies[-1]) / 4 if frequencies[-1] > 0 else 1.0)
+        if ax == laplace_ax:
+            ax.set_ylim([-0.005, 0.2])
         ax.legend(fontsize=8)
         ax.grid(False)
 
@@ -233,15 +235,15 @@ def detect_force_arrival(timepoints: jnp.ndarray, force_dyn: jnp.ndarray, start_
 
 
 def plot_force_comparison(F_dyn_by_state, timepoints, start_time, threshold_fraction=0.05, *,
-                          show_transform: bool = True, laplace_sigma: float = 0.0):
+                          show_transform: bool = True, show_delay: bool = False, laplace_sigma: float = 0.0):
     """Compare the force histories of two initial states, optionally adding two transform rows.
 
     With show_transform=True, row 3 shows complex FFTs of the endpoint force
     differences (solid real, dotted imaginary); row 4 shows Laplace magnitudes
-    at s=laplace_sigma+2j*pi*f. Columns show unaligned and delay-aligned data.
-    All four transforms use the common valid time window ending at t[-1]-delay,
-    avoiding extrapolation of the advanced final force. Frequencies are in Hz,
-    sigma in 1/s, and transform values in N s. Return figure, axes, and delay.
+    at s=laplace_sigma+2j*pi*f. With show_delay=True, a second column shows
+    delay-aligned data and all transforms use the common valid time window ending
+    at t[-1]-delay, avoiding extrapolation of the advanced final force. Frequencies
+    are in Hz, sigma in 1/s, and transform values in N s. Return figure, axes, and delay.
     """
     if len(F_dyn_by_state) != 2:
         raise ValueError("Force comparison requires exactly two initial states.")
@@ -256,20 +258,27 @@ def plot_force_comparison(F_dyn_by_state, timepoints, start_time, threshold_frac
 
     delta_first_F_dyn = forces_dyn[state_a]["first"] - forces_dyn[state_b]["first"]
     delta_final_F_dyn = forces_dyn[state_a]["final"] - forces_dyn[state_b]["final"]
-    delta_final_F_aligned_dyn = jnp.interp(timepoints + delay, timepoints, delta_final_F_dyn, left=jnp.nan, right=jnp.nan)
+    final_differences_dyn = [delta_final_F_dyn]
+    final_labels = ["t"]
+    if show_delay:
+        final_differences_dyn.append(jnp.interp(timepoints + delay, timepoints, delta_final_F_dyn, left=jnp.nan, right=jnp.nan))
+        final_labels.append(r"t+\tau")
     final_spring_id = next(iter(F_dyn_by_state.values())).shape[1]
-    fig, axes = plt.subplots(4 if show_transform else 2, 2, figsize=(10, 12) if show_transform else (8, 6), sharex=False)
+    nrows, ncols = (4 if show_transform else 2), (2 if show_delay else 1)
+    fig, axes = plt.subplots(nrows, ncols, figsize=((10 if show_delay else 5), (12 if show_transform else 6)), sharex=False, squeeze=False)
 
     for state_id, state in enumerate((state_a, state_b)):
         first_force_dyn = forces_dyn[state]["first"]
         final_force_dyn = forces_dyn[state]["final"]
-        final_force_aligned_dyn = jnp.interp(timepoints + delay, timepoints, final_force_dyn, left=jnp.nan, right=jnp.nan)
-        for ax, final_signal_dyn, final_label in zip(axes[0], (final_force_dyn, final_force_aligned_dyn), ("t", r"t+\tau")):
+        final_signals_dyn = [final_force_dyn]
+        if show_delay:
+            final_signals_dyn.append(jnp.interp(timepoints + delay, timepoints, final_force_dyn, left=jnp.nan, right=jnp.nan))
+        for ax, final_signal_dyn, final_label in zip(axes[0], final_signals_dyn, final_labels):
             ax.plot(timepoints, first_force_dyn, color=colors_lst[state_id], label=fr"$F_1$, initial {state}")
             ax.plot(timepoints, final_signal_dyn, color=colors_lst[state_id], linestyle="--",
                     label=fr"$F_{{{final_spring_id}}}({final_label})$, initial {state}")
 
-    for ax, final_difference_dyn, final_label in zip(axes[1], (delta_final_F_dyn, delta_final_F_aligned_dyn), ("t", r"t+\tau")):
+    for ax, final_difference_dyn, final_label in zip(axes[1], final_differences_dyn, final_labels):
         ax.plot(timepoints, delta_first_F_dyn, color=colors_lst[0], label=r"$\Delta F_1(t)$")
         ax.plot(timepoints, final_difference_dyn, color=red, linestyle="--",
                 label=fr"$\Delta F_{{{final_spring_id}}}({final_label})$")
@@ -277,11 +286,12 @@ def plot_force_comparison(F_dyn_by_state, timepoints, start_time, threshold_frac
 
     axes[0, 0].axvline(first_arrival, color="k", linestyle=":", alpha=0.4)
     axes[0, 0].axvline(final_arrival, color="k", linestyle=":", alpha=0.4)
-    axes[0, 1].axvline(first_arrival, color="k", linestyle=":", alpha=0.4)
     axes[0, 0].set_title("Endpoint Forces — Without Delay Alignment")
-    axes[0, 1].set_title(fr"Endpoint Forces — With $\tau={delay * 1e3:.1f}$ ms")
     axes[1, 0].set_title("Force Differences — Without Delay Alignment")
-    axes[1, 1].set_title(fr"Force Differences — With $\tau={delay * 1e3:.1f}$ ms")
+    if show_delay:
+        axes[0, 1].axvline(first_arrival, color="k", linestyle=":", alpha=0.4)
+        axes[0, 1].set_title(fr"Endpoint Forces — With $\tau={delay * 1e3:.1f}$ ms")
+        axes[1, 1].set_title(fr"Force Differences — With $\tau={delay * 1e3:.1f}$ ms")
     axes[0, 0].set_ylabel("Force (N)")
     axes[1, 0].set_ylabel(fr"$F^{{{state_a}}}-F^{{{state_b}}}$ (N)")
     for ax in axes[1]:
@@ -292,12 +302,12 @@ def plot_force_comparison(F_dyn_by_state, timepoints, start_time, threshold_frac
         ax.legend(fontsize=7)
     if show_transform:
         times = np.asarray(timepoints)
-        valid = times + delay <= times[-1]
+        valid = times + delay <= times[-1] if show_delay else np.ones(times.shape, dtype=bool)
         transform_times = times[valid]
         if transform_times.size < 2:
             raise ValueError("Delay alignment leaves fewer than two samples for transforms.")
         first_difference_dyn = np.asarray(delta_first_F_dyn)[valid]
-        for column, final_difference_dyn in enumerate((delta_final_F_dyn, delta_final_F_aligned_dyn)):
+        for column, final_difference_dyn in enumerate(final_differences_dyn):
             fft_ax, laplace_ax = axes[2, column], axes[3, column]
             for signal_dyn, color, label in zip((first_difference_dyn, np.asarray(final_difference_dyn)[valid]), (colors_lst[0], red),
                                             ('First spring difference', 'Final spring difference')):
@@ -316,9 +326,9 @@ def plot_force_comparison(F_dyn_by_state, timepoints, start_time, threshold_frac
             laplace_ax.set_ylabel('Transform magnitude (N s)')
             for ax in (fft_ax, laplace_ax):
                 ax.set_xlabel('Frequency (Hz)')
-                ax.set_xlim(0, float(frequencies[-1]) / 2 if frequencies[-1] > 0 else 1.0)
+                ax.set_xlim(0, float(frequencies[-1]) / 4 if frequencies[-1] > 0 else 1.0)
                 if ax == laplace_ax:
-                    ax.set_ylim([-0.005, 0.03])
+                    ax.set_ylim([-0.005, 0.06])
                 else:
                     ax.set_ylim([-0.028, 0.028])
                 ax.grid(False)
