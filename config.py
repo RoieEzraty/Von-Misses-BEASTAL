@@ -80,8 +80,8 @@ class SupervisorConfig:
     # training params, not relevant for Nathan
     T: int = 64
     alpha: float = 2.0
-    # algorithm: str = "short"  # Options: "short" or "long" (resetting), or "random" for random attempt
-    algorithm: str = "random"  # Options: "short" or "long" (resetting), or "random" for random attempt
+    algorithm: str = "short"  # Options: "short" or "long" (resetting), or "random" for random attempt
+    # algorithm: str = "random"  # Options: "short" or "long" (resetting), or "random" for random attempt
     if algorithm == "random":
         rand_key_dataset = 33
     loss_type: str = "state"
