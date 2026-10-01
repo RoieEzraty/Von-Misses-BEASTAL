@@ -77,6 +77,83 @@ def plot_impulse(timepoints, impulse_dyn):
     return fig, ax
 
 
+def plot_response(u_dyn: np.ndarray, delta_dyn: np.ndarray, F_dyn: np.ndarray, timepoints: np.ndarray, impulse_dyn: np.ndarray,
+                  alpha: float = 1, cmap_temporal=custom_cmap, sup_title: str | None = None, 
+                  figsize: tuple[float, float] | None = None, *, save_png: bool = False,
+                  png_path: str | Path = "plot_response.png") -> tuple[plt.Figure, np.ndarray]:
+    """Plot ``u``, ``delta``, the imposed displacement, and endpoint forces.
+
+    All inputs contain simulation time along rows. ``F_dyn`` contains spring
+    forces in N. Optionally save the completed figure as a PNG. Return the
+    figure and 2x2 main axes, excluding colorbar axes.
+    """
+    if figsize is None:
+        figsize = (8, 5)
+    fig, axes = plt.subplots(2, 2, figsize=figsize)
+    (ax1, ax2), (ax3, ax4) = axes[:2]
+
+    applied_displacement_dyn = impulse_dyn * 1e3
+    u_mm_dyn = u_dyn * 1e3
+    delta_mm_dyn = delta_dyn * 1e3
+
+    t_end = float(jnp.max(timepoints))
+    time_edges = jnp.linspace(0, t_end, u_mm_dyn.shape[0] + 1)
+    unit_edges = jnp.arange(u_mm_dyn.shape[1] + 1)
+
+    ax1.plot(timepoints, applied_displacement_dyn, color='k', alpha=alpha)
+    p2 = ax2.pcolor(time_edges, unit_edges, u_mm_dyn.T, cmap=cmap_temporal)
+    p3 = ax3.pcolor(time_edges, unit_edges, delta_mm_dyn.T, cmap=cmap_temporal)
+
+    plt.colorbar(p2, ax=ax2, pad=0.01, label='$u_n$ (mm)')
+    plt.colorbar(p3, ax=ax3, pad=0.01, label=r'$\delta_n$ (mm)')
+
+    ax1.set_title('Applied Displacement', fontsize=12)
+    ax2.set_title('Displacement, $u_n$', fontsize=12)
+    ax3.set_title(r'Displacement, $\delta_n$', fontsize=12)
+
+    ax2.set_yticks(jnp.arange(0.5, 0.5+u_mm_dyn.shape[1]))
+    ax2.set_yticklabels(jnp.arange(u_mm_dyn.shape[1]), fontsize=12)
+    ax3.set_yticks(jnp.arange(0.5, 0.5+u_mm_dyn.shape[1]))
+    ax3.set_yticklabels(jnp.arange(u_mm_dyn.shape[1]), fontsize=12)
+
+    ax1.set_xlim([0, t_end])
+    ax2.set_xlim([0, t_end])
+    ax3.set_xlim([0, t_end])
+
+    ax1.set_xlabel('Time (s)', fontsize=12)
+    ax2.set_xlabel('Time (s)', fontsize=12)
+    ax3.set_xlabel('Time (s)', fontsize=12)
+
+    ax1.set_ylabel('Displacement (mm)', fontsize=12)
+    ax2.set_ylabel('$n$', fontsize=12)
+    ax3.set_ylabel('$n$', fontsize=12)
+
+    # Previous per-unit displacement-in-time plots:
+    # for i in range(n_units):
+    #     ax3.plot(timepoints, u_mm_dyn[:, i], color=trace_colors[i], alpha=alpha, label=f'$u_{i}$')
+    #     ax4.plot(timepoints, delta_mm_dyn[:, i], color=trace_colors[i], alpha=alpha, label=fr'$\delta_{i}$')
+
+    first_truss_force_dyn = F_dyn[:, 0]
+    final_truss_force_dyn = F_dyn[:, -1]
+    ax4.plot(timepoints, first_truss_force_dyn, color=colors_lst[0], alpha=alpha, label='First truss')
+    ax4.plot(timepoints, final_truss_force_dyn, color=colors_lst[1], alpha=alpha, label='Final truss')
+    ax4.set_xlim([0, t_end])
+    ax4.set_xlabel('Time (s)', fontsize=12)
+    ax4.set_ylabel('Force (N)', fontsize=12)
+    ax4.set_title('Endpoint Truss Forces', fontsize=12)
+    ax4.legend(fontsize=8, loc='upper right')
+
+    if sup_title is not None:
+        fig.suptitle(sup_title)
+        
+    fig.tight_layout()
+    if save_png:
+        png_path = Path(png_path)
+        png_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(png_path, dpi=300, bbox_inches="tight")
+    return fig, axes
+
+
 # -------------------------------------------------
 # TIP FORCES
 # -------------------------------------------------
@@ -184,83 +261,6 @@ def plot_force_comparison(F_dyn_by_state, timepoints, start_time, threshold_frac
     return fig, axes, delay
 
 
-def plot_response(u_dyn: np.ndarray, delta_dyn: np.ndarray, F_dyn: np.ndarray, timepoints: np.ndarray, impulse_dyn: np.ndarray,
-                  alpha: float = 1, cmap_temporal=custom_cmap, sup_title: str | None = None, 
-                  figsize: tuple[float, float] | None = None, *, save_png: bool = False,
-                  png_path: str | Path = "plot_response.png") -> tuple[plt.Figure, np.ndarray]:
-    """Plot ``u``, ``delta``, the imposed displacement, and endpoint forces.
-
-    All inputs contain simulation time along rows. ``F_dyn`` contains spring
-    forces in N. Optionally save the completed figure as a PNG. Return the
-    figure and 2x2 main axes, excluding colorbar axes.
-    """
-    if figsize is None:
-        figsize = (8, 5)
-    fig, axes = plt.subplots(2, 2, figsize=figsize)
-    (ax1, ax2), (ax3, ax4) = axes[:2]
-
-    applied_displacement_dyn = impulse_dyn * 1e3
-    u_mm_dyn = u_dyn * 1e3
-    delta_mm_dyn = delta_dyn * 1e3
-
-    t_end = float(jnp.max(timepoints))
-    time_edges = jnp.linspace(0, t_end, u_mm_dyn.shape[0] + 1)
-    unit_edges = jnp.arange(u_mm_dyn.shape[1] + 1)
-
-    ax1.plot(timepoints, applied_displacement_dyn, color='k', alpha=alpha)
-    p2 = ax2.pcolor(time_edges, unit_edges, u_mm_dyn.T, cmap=cmap_temporal)
-    p3 = ax3.pcolor(time_edges, unit_edges, delta_mm_dyn.T, cmap=cmap_temporal)
-
-    plt.colorbar(p2, ax=ax2, pad=0.01, label='$u_n$ (mm)')
-    plt.colorbar(p3, ax=ax3, pad=0.01, label=r'$\delta_n$ (mm)')
-
-    ax1.set_title('Applied Displacement', fontsize=12)
-    ax2.set_title('Displacement, $u_n$', fontsize=12)
-    ax3.set_title(r'Displacement, $\delta_n$', fontsize=12)
-
-    ax2.set_yticks(jnp.arange(0.5, 0.5+u_mm_dyn.shape[1]))
-    ax2.set_yticklabels(jnp.arange(u_mm_dyn.shape[1]), fontsize=12)
-    ax3.set_yticks(jnp.arange(0.5, 0.5+u_mm_dyn.shape[1]))
-    ax3.set_yticklabels(jnp.arange(u_mm_dyn.shape[1]), fontsize=12)
-
-    ax1.set_xlim([0, t_end])
-    ax2.set_xlim([0, t_end])
-    ax3.set_xlim([0, t_end])
-
-    ax1.set_xlabel('Time (s)', fontsize=12)
-    ax2.set_xlabel('Time (s)', fontsize=12)
-    ax3.set_xlabel('Time (s)', fontsize=12)
-
-    ax1.set_ylabel('Displacement (mm)', fontsize=12)
-    ax2.set_ylabel('$n$', fontsize=12)
-    ax3.set_ylabel('$n$', fontsize=12)
-
-    # Previous per-unit displacement-in-time plots:
-    # for i in range(n_units):
-    #     ax3.plot(timepoints, u_mm_dyn[:, i], color=trace_colors[i], alpha=alpha, label=f'$u_{i}$')
-    #     ax4.plot(timepoints, delta_mm_dyn[:, i], color=trace_colors[i], alpha=alpha, label=fr'$\delta_{i}$')
-
-    first_truss_force_dyn = F_dyn[:, 0]
-    final_truss_force_dyn = F_dyn[:, -1]
-    ax4.plot(timepoints, first_truss_force_dyn, color=colors_lst[0], alpha=alpha, label='First truss')
-    ax4.plot(timepoints, final_truss_force_dyn, color=colors_lst[1], alpha=alpha, label='Final truss')
-    ax4.set_xlim([0, t_end])
-    ax4.set_xlabel('Time (s)', fontsize=12)
-    ax4.set_ylabel('Force (N)', fontsize=12)
-    ax4.set_title('Endpoint Truss Forces', fontsize=12)
-    ax4.legend(fontsize=8, loc='upper right')
-
-    if sup_title is not None:
-        fig.suptitle(sup_title)
-        
-    fig.tight_layout()
-    if save_png:
-        png_path = Path(png_path)
-        png_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(png_path, dpi=300, bbox_inches="tight")
-    return fig, axes
-
-
 def plot_laplace_fourier(F_dyn: np.ndarray, timepoints: np.ndarray, *, laplace_sigma: float = 0.0, alpha: float = 1,
                          sup_title: str | None = None, figsize: tuple[float, float] = (8, 3), save_png: bool = False,
                          png_path: str | Path = "plot_laplace_fourier.png") -> tuple[plt.Figure, np.ndarray]:
@@ -311,7 +311,6 @@ def plot_laplace_fourier(F_dyn: np.ndarray, timepoints: np.ndarray, *, laplace_s
 # -------------------------
 # TRAINING POST PROCESSING
 # -------------------------
-
 def plot_success_and_training_t(M_mat: np.ndarray, t_mat: np.ndarray, *, figsize: tuple[float, float] = (5, 5)) -> tuple[plt.Figure, plt.Axes]:
     """Plot training success, coloring successful transitions by training time.
 
@@ -348,6 +347,71 @@ def plot_success_and_training_t(M_mat: np.ndarray, t_mat: np.ndarray, *, figsize
     ax.grid(False)
     fig.tight_layout()
     return fig, ax
+
+# ------------------
+# PARAMETER ANALYSIS
+# ------------------
+def plot_parameter_force_comparison(F_dyn_by_state: dict[str, np.ndarray], timepoints: np.ndarray,
+                                    state_pairs: tuple[tuple[str, str], ...], *,
+                                    figsize: tuple[float, float] | None = None) -> tuple[plt.Figure, np.ndarray]:
+    """Plot endpoint forces and pairwise differences for several state pairs."""
+    if not state_pairs:
+        raise ValueError("state_pairs must contain at least one comparison.")
+    missing_states = sorted({state for pair in state_pairs for state in pair if state not in F_dyn_by_state})
+    if missing_states:
+        raise ValueError(f"Missing force histories for: {', '.join(missing_states)}")
+    if figsize is None:
+        figsize = (11, 3.2 * len(state_pairs))
+    fig, axes = plt.subplots(len(state_pairs), 2, figsize=figsize, sharex=True, sharey=True, squeeze=False, layout="constrained")
+    final_spring_id = next(iter(F_dyn_by_state.values())).shape[1]
+    for row, (state_a, state_b) in enumerate(state_pairs):
+        for state_id, state in enumerate((state_a, state_b)):
+            axes[row, 0].plot(timepoints, F_dyn_by_state[state][:, 0], color=colors_lst[state_id], label=fr"$F_1$, initial {state}")
+            axes[row, 0].plot(timepoints, F_dyn_by_state[state][:, -1], color=colors_lst[state_id], linestyle="--", label=fr"$F_{{{final_spring_id}}}$, initial {state}")
+        delta_first_F_dyn = F_dyn_by_state[state_a][:, 0] - F_dyn_by_state[state_b][:, 0]
+        delta_final_F_dyn = F_dyn_by_state[state_a][:, -1] - F_dyn_by_state[state_b][:, -1]
+        axes[row, 1].plot(timepoints, delta_first_F_dyn, color=colors_lst[0], label=r"$\Delta F_1(t)$")
+        axes[row, 1].plot(timepoints, delta_final_F_dyn, color=red, linestyle="--", label=fr"$\Delta F_{{{final_spring_id}}}(t)$")
+        axes[row, 1].axhline(0, color="k", linewidth=0.8, alpha=0.35)
+        axes[row, 0].set(title=f"Endpoint forces: {state_a} vs {state_b}", ylabel="Force (N)")
+        axes[row, 1].set(title=f"Force differences: {state_a} - {state_b}", ylabel=fr"$F^{{{state_a}}}-F^{{{state_b}}}$ (N)")
+        for ax in axes[row]:
+            ax.set_xlim(0, float(np.max(timepoints)))
+            ax.grid(False)
+            ax.legend(fontsize=7)
+    axes[-1, 0].set_xlabel("Time (s)")
+    axes[-1, 1].set_xlabel("Time (s)")
+    return fig, axes
+
+
+def plot_amplitude_frequency_study(state_number_grids_by_state: dict[str, np.ndarray], all_state_labels: tuple[str, ...],
+                                   initial_states: tuple[str, ...], amplitudes_mm: np.ndarray, frequencies_hz: np.ndarray,
+                                   *, figsize: tuple[float, float] | None = None) -> tuple[plt.Figure, np.ndarray]:
+    """Plot final-state amplitude-frequency maps with shared axes and state colors."""
+    if not initial_states:
+        raise ValueError("initial_states must contain at least one state.")
+    missing_states = [state for state in initial_states if state not in state_number_grids_by_state]
+    if missing_states:
+        raise ValueError(f"Missing amplitude-frequency grids for: {', '.join(missing_states)}")
+    amplitudes_mm, frequencies_hz = np.asarray(amplitudes_mm), np.asarray(frequencies_hz)
+    expected_shape = (len(amplitudes_mm), len(frequencies_hz))
+    if any(np.asarray(state_number_grids_by_state[state]).shape != expected_shape for state in initial_states):
+        raise ValueError(f"Every state grid must have shape {expected_shape}.")
+    _, _, study_cmap = colors.color_scheme()
+    state_cmap = ListedColormap(study_cmap(np.linspace(0, 1, len(all_state_labels))))
+    state_norm = BoundaryNorm(np.arange(-0.5, len(all_state_labels) + 0.5), state_cmap.N)
+    A_edges_mm, f_edges_hz = colors.parameters_cell_edges(amplitudes_mm), colors.parameters_cell_edges(frequencies_hz)
+    if figsize is None:
+        figsize = (5 * len(initial_states), 4)
+    fig, axes = plt.subplots(1, len(initial_states), figsize=figsize, sharex=True, sharey=True, squeeze=False, layout="constrained")
+    for ax, initial_state in zip(axes.flat, initial_states):
+        state_map = ax.pcolormesh(f_edges_hz, A_edges_mm, state_number_grids_by_state[initial_state], cmap=state_cmap, norm=state_norm, shading="flat")
+        ax.set(xlabel="Frequency (Hz)", ylabel="Amplitude (mm)", title=f"Initial {initial_state}", xticks=np.linspace(frequencies_hz[0], frequencies_hz[-1], 5), yticks=np.linspace(amplitudes_mm[0], amplitudes_mm[-1], 5), ylim=(A_edges_mm[0], A_edges_mm[-1]))
+        ax.tick_params(labelbottom=True, labelleft=True)
+        ax.grid(False)
+    state_colorbar = fig.colorbar(state_map, ax=list(axes.flat), ticks=range(len(all_state_labels)), label="Final state", pad=0.02)
+    state_colorbar.ax.set_yticklabels(all_state_labels)
+    return fig, axes
 
 
 # -------------------------------------------------

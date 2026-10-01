@@ -69,3 +69,13 @@ def color_scheme(scheme: str = "mine", show: bool = False, add_shim: bool = Fals
         return colors_lst, red, custom_cmap, shim    
 
     return colors_lst, red, custom_cmap
+
+
+def parameters_cell_edges(values: NDArray[np.number]) -> NDArray[np.float64]:
+    """Return cell edges for one-dimensional pcolormesh parameter coordinates."""
+    values = np.asarray(values, dtype=float)
+    if values.ndim != 1 or values.size == 0:
+        raise ValueError("Parameter coordinates must be a nonempty one-dimensional array.")
+    if values.size == 1:
+        return values[0] + np.array([-0.5, 0.5])
+    return np.concatenate(([values[0] - np.diff(values)[0] / 2], (values[:-1] + values[1:]) / 2, [values[-1] + np.diff(values)[-1] / 2]))

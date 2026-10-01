@@ -97,7 +97,7 @@ def potential_order4_summed(ks: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
 
 def bistable_potential(params: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
     """Evaluate a Von Mises truss potential for one or more parameter sets."""
-    effective_k, length, theta0, offset, k_c, eps = params
+    effective_k, length, theta0, offset, k_c, eps = params  # all ks the same, but length, theta0, vary experimentally
     rest_length = length / jnp.cos(theta0) - 2 * offset
     a0 = (rest_length + 2 * offset) * jnp.sin(theta0)
     extension = length / jnp.cos(theta0) - jnp.sqrt((a0 - x) ** 2 + length**2)

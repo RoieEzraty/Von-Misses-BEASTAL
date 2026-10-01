@@ -12,6 +12,20 @@ from matplotlib.ticker import MaxNLocator
 plt.rcParams["pdf.fonttype"] = 42
 
 
+# -----------------
+# IMPORT
+# -----------------
+def read_M_and_t(M_file, t_file):
+    M_mat = np.loadtxt(M_file, delimiter=",")
+    t_mat = np.loadtxt(t_file, delimiter=",")
+    if M_mat.shape != t_mat.shape:
+        raise ValueError(f"Success and training-time matrices must have the same shape; got {M_mat.shape} and {t_mat.shape}.")
+    return M_mat, t_mat
+
+
+# -----------------
+# EXPORT
+# ----------------
 def export_importants_single_run(u_dyn: ArrayLike, delta_dyn: ArrayLike, F_dyn: ArrayLike, timepoints: ArrayLike, impulse_dyn: ArrayLike,
                                  initial_state: str, final_state: str, output_dir: str | Path = "single_run_exports") -> Path:
     """Export the main time-dependent quantities from one impulse simulation to CSV."""
@@ -38,10 +52,3 @@ def export_importants_single_run(u_dyn: ArrayLike, delta_dyn: ArrayLike, F_dyn: 
     export_path = export_dir / f"single_impulse_initial_{initial_state}_final_{final_state}.csv"
     np.savetxt(export_path, np.column_stack(matrices), delimiter=",", header=",".join(column_names), comments="")
     return export_path
-
-def read_M_and_t(M_file, t_file):
-    M_mat = np.loadtxt(M_file, delimiter=",")
-    t_mat = np.loadtxt(t_file, delimiter=",")
-    if M_mat.shape != t_mat.shape:
-        raise ValueError(f"Success and training-time matrices must have the same shape; got {M_mat.shape} and {t_mat.shape}.")
-    return M_mat, t_mat
