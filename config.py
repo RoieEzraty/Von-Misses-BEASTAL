@@ -26,24 +26,27 @@ class VariablesConfig:
 
     # actual truss parameters
     experimental_data_dir: Path = Path("Audrey_exp_data")
-    reference_length: float = 86e-3
+    reference_length: float = 86e-3  # [mm] for pixel to mm conversion
     increasing_b_mm: tuple[float, ...] = (8.3, 8.7, 9.3)  # b parameters for each truss increasing
     increasing_theta0_rise_mm: tuple[float, ...] = (8.3, 10.7, 12.3)  # rest angle for each truss increasing 
     increasing_theta0_span_mm: float = 40.0
-    k_c: float = 1e6  # contact stiffness [N/m] (=[kg/s^2])
+
+    # contact
+    k_c: float = 5e3  # contact stiffness [N/m] (=[kg/s^2])
     # k_c: float = 0  # no contact stiffness [N/m]
-    eps: float = 1e-3  # clearance beyond the second equilibrium before contact [m]
+    eps: float = 0.4e-3  # clearance beyond the second equilibrium before contact [m]
 
     # relevant for both
-    k_truss: float = 1428.0  # stiffness of one Von Mises truss arm, [N/m] (=[kg/s^2])
+    k_truss: float = 1428.0  # stiffness of one Von Mises truss arm, [N/m] (=[kg/s^2]), 1st paper
     # m1 = 70*10**(-3) # m_out [kg], 1st paper
-    m1: float = 33.6e-3  # outer, 2nd paper beginning
+    # m1: float = 33.6e-3  # outer, 2nd paper beginning
+    m1: float = 45e-3  # outer, discerning mass Oct1
     m2 = 30e-3 # uniform physical inner masses [kg], 1st paper
-    # m2: float = 3.8e-3  # inner, 2nd paper beginning
     # m2: float = 3.8e-3  # inner, 2nd paper beginning
     increasing_m_range: tuple[float, float] = (3.8, 8.5)
     # k1 = 125 # [N/m]  # outer, 1st paper
-    k1: float = 2 * 1020.0  # outer, 2nd paper [N/m] (=[kg/s^2])
+    # k1: float = 2 * 1020.0  # outer, 2nd paper [N/m] (=[kg/s^2])
+    k1 = 400  # [N/m] discerning force Oct1
     c1: float = 0.22  # damping of outer mass [kg/s], 1st paper
     c2: float = 0.1  # damping of inner mass [kg/s], 1st paper
     mu_k: float = 0.0675  # coefficient of kinetic friction
@@ -62,15 +65,16 @@ class SupervisorConfig:
     # amplitude = 22*10**(-3) # Peak amplitude [m], 1st paper to buckle
     amplitude: float = 1.8e-3  # probe 2nd paper
     # amplitude: float = 2.5e-3  # my try Sep29
+    # frequency: float = 10  # probe 1st paper
     # frequency: float = 23.3  # probe 2nd paper
-    frequency: float = 23.3  # my try Sep14
+    frequency: float = 20  # discerning force Oct1
     gaussian_width: float | None = None
     start_time: float = 0.025  # Start-time offset [s] for both input types
     second_pulse_factor: float = 1.5
     n_timepoints: int = 1000  # for equilibrium integration
     # f_cutoff: int = 100  # [Hz]
     # duration: float = n_timepoints / (4*f_cutoff)
-    duration = 0.8
+    duration = 0.75
 
     # for ODE solution, not in use, should I omit those?
     rtol: float = 1e-8

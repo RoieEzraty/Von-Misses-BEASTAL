@@ -201,7 +201,7 @@ class VariablesClass:
         physical_params = jnp.column_stack((2 * cfg.Variabs.k_truss * jnp.ones(self.n_physical_units), length, theta0, b, self.k_c * jnp.ones(self.n_physical_units), self.eps * jnp.ones(self.n_physical_units)))
         left_boundary = physical_params[0].at[jnp.array([0, 4])].set(0)
         right_boundary = physical_params[-1].at[jnp.array([0, 4])].set(0)
-        self.bistable_potential_params = jnp.vstack((left_boundary, physical_params, right_boundary))
+        self.bistable_potential_params = jnp.vstack((left_boundary, physical_params, right_boundary))  # all k_trusses the same, but length, theta0, vary experimentally
         a0 = (length) * jnp.tan(theta0)
         self.equilibrium1 = jnp.zeros_like(a0)
         self.equilibrium2 = 2 * a0
