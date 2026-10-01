@@ -40,14 +40,14 @@ class EquilibriumClass:
         return coupling_energy + local_energy
 
     def rhs(self, local_dyn: jnp.ndarray, time: float, m1s: jnp.ndarray, m2s: jnp.ndarray,
-            c1s: jnp.ndarray, c2s: jnp.ndarray, mu_ks: jnp.ndarray, beta: float, 
-            stiffness_vals: jnp.ndarray, timepoints: jnp.ndarray, 
+            c1s: jnp.ndarray, c2s: jnp.ndarray, mu_ks: jnp.ndarray, beta: float,
+            stiffness_vals: jnp.ndarray, timepoints: jnp.ndarray,
             impulse_dyn: jnp.ndarray) -> jnp.ndarray:
         """Return displacement and velocity derivatives for free DOFs."""
         displacement, velocity = local_dyn
         mass_vals = jnp.stack((m1s, m2s), axis=1).reshape(-1)
         relative_velocity = velocity[1::2] - velocity[0::2]
-        damping_un = (c1s * velocity[0::2] + mu_ks * 9.81 * m1s * jnp.tanh(velocity[0::2] * beta) 
+        damping_un = (c1s * velocity[0::2] + mu_ks * 9.81 * m1s * jnp.tanh(velocity[0::2] * beta)
                       - c2s * relative_velocity)
         damping_vn = c2s * relative_velocity
         damping = jnp.stack((damping_un, damping_vn), axis=1).reshape(-1)

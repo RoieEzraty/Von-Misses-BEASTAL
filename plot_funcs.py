@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -108,8 +110,9 @@ def plot_force_comparison(F_dyn_by_state, timepoints, start_time, threshold_frac
         final_differences_dyn.append(jnp.interp(timepoints + delay, timepoints, delta_final_F_dyn, left=jnp.nan, right=jnp.nan))
         final_labels.append(r"t+\tau")
     final_spring_id = next(iter(F_dyn_by_state.values())).shape[1]
-    nrows, ncols = (4 if show_transform else 2), (2 if show_delay else 1)
-    fig, axes = plt.subplots(nrows, ncols, figsize=((10 if show_delay else 5), (12 if show_transform else 6)), sharex=False, squeeze=False)
+    nrows = 4 if show_transform and show_delay else 2
+    ncols = 2 if show_delay or show_transform else 1
+    fig, axes = plt.subplots(nrows, ncols, figsize=((10 if show_delay or show_transform else 5), (12 if show_transform and show_delay else 6)), sharex=False, squeeze=False)
 
     for state_id, state in enumerate((state_a, state_b)):
         first_force_dyn = forces_dyn[state]["first"]
@@ -130,8 +133,8 @@ def plot_force_comparison(F_dyn_by_state, timepoints, start_time, threshold_frac
 
     axes[0, 0].axvline(first_arrival, color="k", linestyle=":", alpha=0.4)
     axes[0, 0].axvline(final_arrival, color="k", linestyle=":", alpha=0.4)
-    axes[0, 0].set_title("Endpoint Forces — Without Delay Alignment")
-    axes[1, 0].set_title("Force Differences — Without Delay Alignment")
+    axes[0, 0].set_title("Endpoint Forces")
+    axes[1, 0].set_title("Force Differences")
     if show_delay:
         axes[0, 1].axvline(first_arrival, color="k", linestyle=":", alpha=0.4)
         axes[0, 1].set_title(fr"Endpoint Forces — With $\tau={delay * 1e3:.1f}$ ms")
@@ -140,7 +143,7 @@ def plot_force_comparison(F_dyn_by_state, timepoints, start_time, threshold_frac
     axes[1, 0].set_ylabel(fr"$F^{{{state_a}}}-F^{{{state_b}}}$ (N)")
     for ax in axes[1]:
         ax.set_xlabel("Time (s)")
-    for ax in axes[:2].flat:
+    for ax in axes[:2, :2 if show_delay else 1].flat:
         ax.grid(False)
         ax.set_xlim(0, float(jnp.max(timepoints)))
         ax.legend(fontsize=7)
@@ -152,7 +155,7 @@ def plot_force_comparison(F_dyn_by_state, timepoints, start_time, threshold_frac
             raise ValueError("Delay alignment leaves fewer than two samples for transforms.")
         first_difference_dyn = np.asarray(delta_first_F_dyn)[valid]
         for column, final_difference_dyn in enumerate(final_differences_dyn):
-            fft_ax, laplace_ax = axes[2, column], axes[3, column]
+            fft_ax, laplace_ax = (axes[2, column], axes[3, column]) if show_delay else (axes[0, 1], axes[1, 1])
             for signal_dyn, color, label in zip((first_difference_dyn, np.asarray(final_difference_dyn)[valid]), (colors_lst[0], red),
                                             ('First spring difference', 'Final spring difference')):
                 frequencies, spectrum = helpers_builders.force_fft(transform_times, signal_dyn)
@@ -183,11 +186,13 @@ def plot_force_comparison(F_dyn_by_state, timepoints, start_time, threshold_frac
 
 def plot_response(u_dyn: np.ndarray, delta_dyn: np.ndarray, F_dyn: np.ndarray, timepoints: np.ndarray, impulse_dyn: np.ndarray,
                   alpha: float = 1, cmap_temporal=custom_cmap, sup_title: str | None = None, 
-                  figsize: tuple[float, float] | None = None) -> tuple[plt.Figure, np.ndarray]:
+                  figsize: tuple[float, float] | None = None, *, save_png: bool = False,
+                  png_path: str | Path = "plot_response.png") -> tuple[plt.Figure, np.ndarray]:
     """Plot ``u``, ``delta``, the imposed displacement, and endpoint forces.
 
     All inputs contain simulation time along rows. ``F_dyn`` contains spring
-    forces in N. Return the figure and 2x2 main axes, excluding colorbar axes.
+    forces in N. Optionally save the completed figure as a PNG. Return the
+    figure and 2x2 main axes, excluding colorbar axes.
     """
     if figsize is None:
         figsize = (8, 5)
@@ -249,11 +254,16 @@ def plot_response(u_dyn: np.ndarray, delta_dyn: np.ndarray, F_dyn: np.ndarray, t
         fig.suptitle(sup_title)
         
     fig.tight_layout()
+    if save_png:
+        png_path = Path(png_path)
+        png_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(png_path, dpi=300, bbox_inches="tight")
     return fig, axes
 
 
 def plot_laplace_fourier(F_dyn: np.ndarray, timepoints: np.ndarray, *, laplace_sigma: float = 0.0, alpha: float = 1,
-                         sup_title: str | None = None, figsize: tuple[float, float] = (8, 3)) -> tuple[plt.Figure, np.ndarray]:
+                         sup_title: str | None = None, figsize: tuple[float, float] = (8, 3), save_png: bool = False,
+                         png_path: str | Path = "plot_laplace_fourier.png") -> tuple[plt.Figure, np.ndarray]:
     """Plot endpoint-force Fourier and Laplace transforms in a 1x2 figure.
 
     F_dyn contains spring forces in N, with time along rows and springs along
@@ -261,7 +271,8 @@ def plot_laplace_fourier(F_dyn: np.ndarray, timepoints: np.ndarray, *, laplace_s
     FFT real parts are solid and imaginary parts dotted, one color per spring.
     Laplace magnitudes use s=laplace_sigma+2j*pi*f, with sigma in 1/s.
     Show the lower half of the nonnegative frequency range in Hz without
-    doubling FFT values. Return the figure and a length-two array of axes.
+    doubling FFT values. Optionally save the completed figure as a PNG. Return
+    the figure and a length-two array of axes.
     """
     fig, axes = plt.subplots(1, 2, figsize=figsize)
     fft_ax, laplace_ax = axes
@@ -291,6 +302,10 @@ def plot_laplace_fourier(F_dyn: np.ndarray, timepoints: np.ndarray, *, laplace_s
     if sup_title is not None:
         fig.suptitle(sup_title)
     fig.tight_layout()
+    if save_png:
+        png_path = Path(png_path)
+        png_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(png_path, dpi=300, bbox_inches="tight")
     return fig, axes
 
 # -------------------------
@@ -356,7 +371,7 @@ def plot_potential(potential_params: jnp.ndarray, truss_model: str, x_min: float
     ax.plot(displacement * 1e3, energy * 1e3)
     ax.set(xlabel="Displacement (mm)", ylabel="Energy (mJ)", title="Bistable Energy Landscape")
     fig.tight_layout()
-    ax.set_ylim([-0.5, 2.5])
+    ax.set_ylim([-0.3, 2.65])
     return fig, ax
 
 

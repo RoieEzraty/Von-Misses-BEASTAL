@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 class SupervisorClass:
     """Hold integration times, initial states, and the imposed displacement."""
 
-    def __init__(self, cfg: ExperimentConfig) -> None:
+    def __init__(self, cfg: ExperimentConfig, State: "StateClass", Eq: "EquilibriumClass") -> None:
         # read from CFG
         self.cfg = cfg.Sprvsr
         if cfg.Sprvsr.n_timepoints < 2:
@@ -72,7 +72,10 @@ class SupervisorClass:
         # if len(self.desired_state) != cfg.Variabs.n_units or any(bit not in "01" for bit in self.desired_state):
         #     raise ValueError("desired_state must contain one binary entry per physical unit.")
         # self.desired_state: NDArray[np.float32] = np.asarray([int(bit) for bit in self.desired_state], dtype=np.float32)
-        self.measured_state: NDArray[np.float32] | None = None
+        if self.loss_type == "state":
+            self.measured_state: NDArray[np.float32] | None = None
+        elif self.loss_type == "force":
+            self.measured_force: NDArray[np.float32] | None = None 
         self.dLoss_do: NDArray[np.float32] = zeros((cfg.Variabs.n_units,), dtype=np.float32)
         self.loss: float = 0.0
         self.update_A_nxt: float = 0.0
@@ -80,7 +83,11 @@ class SupervisorClass:
 
         self.impulse_dyn: jnp.ndarray | None = None
 
-    def set_desired_state(self, desired_state: Optional[None] = None):
+        # Store objects whose identities remain but array change
+        self.State = State
+        self.Eq = Eq
+
+    def set_desired_state(self, desired_state: Optional[None] = None, desired_force: Optional[None] = None):
         """
         Codex please document
         """
@@ -89,7 +96,8 @@ class SupervisorClass:
         else:
             desired_state_str = self.cfg.desired_state            
         self.desired_state = np.asarray([int(bit) for bit in desired_state_str], dtype=np.float32)
-        
+        if self.loss_type == "force":
+            self.desired_force = np.asarray(desired_force)
 
     def program_impulse(self, impulse_type: Optional[str] = None, timepoints: Optional[jnp.ndarray] = None, amplitude: Optional[float] = None,
                         start_time: Optional[float] = None, frequency: Optional[float] = None, width: Optional[float] = None) -> jnp.ndarray:
@@ -119,10 +127,19 @@ class SupervisorClass:
         self.impulse_dyn = impulse_dyn
         return impulse_dyn
 
-    def measure(self, State: "StateClass") -> None:
+    def measure(self) -> None:
         """Store the current measured state for the configured loss."""
         if self.loss_type == "state":
-            self.measured_state = np.asarray(State.state, dtype=np.float32)
+            self.measured_state = np.asarray(self.State.state, dtype=np.float32)
+        elif self.loss_type == "force":
+            self.send_impulse()
+            self.measured_force = np.asarray(self.Eq.F_dyn, dtype=np.float32)
+
+    def send_impulse(self) -> None:
+        """
+        Send the impulse, calculate dynamics in Eq class
+        """
+        self.Eq.solve(self.State, self)
 
     def calc_loss(self, t: int, measured_state: NDArray[np.number] | None = None) -> float:
         """Store the squared state loss and ``dLoss_do = partial L / partial B`` at step ``t``."""
