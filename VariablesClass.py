@@ -64,7 +64,7 @@ class VariablesClass:
 
     # Potential and equilibria shared by both model choices.
     potential_fn: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]  # Direct: evaluated for local energy at every integration step.
-    bistable_potential_params: jnp.ndarray  # Indirect: packed into stiffness_vals; truss rows are [2*k_truss, L, theta0, b, k_c, eps].
+    bistable_potential_params: jnp.ndarray  # Indirect: truss rows are [2*k_truss, L, theta0, b], plus [k_c, eps] when contact is enabled.
     equilibrium1: jnp.ndarray  # Indirect: StateClass uses it only to initialize state-0 displacements.
     equilibrium2: jnp.ndarray  # Indirect: StateClass uses it only to initialize state-1 displacements; equals 2*a0 for trusses.
     stiffness_vals: jnp.ndarray  # Direct: rows contain [k1, *bistable_potential_params].
@@ -198,10 +198,16 @@ class VariablesClass:
         self.b = b
 
         # calculate equilibria
-        physical_params = jnp.column_stack((2 * cfg.Variabs.k_truss * jnp.ones(self.n_physical_units), length, theta0, b, self.k_c * jnp.ones(self.n_physical_units), self.eps * jnp.ones(self.n_physical_units)))
-        left_boundary = physical_params[0].at[jnp.array([0, 4])].set(0)
-        right_boundary = physical_params[-1].at[jnp.array([0, 4])].set(0)
+        physical_params = jnp.column_stack((2 * cfg.Variabs.k_truss * jnp.ones(self.n_physical_units), length, theta0, b))
+        if self.k_c != 0:
+            physical_params = jnp.column_stack((physical_params, self.k_c * jnp.ones(self.n_physical_units), self.eps * jnp.ones(self.n_physical_units)))
+            left_boundary = physical_params[0].at[jnp.array([0, 4])].set(0)
+            right_boundary = physical_params[-1].at[jnp.array([0, 4])].set(0)
+        else:
+            left_boundary = physical_params[0].at[0].set(0)
+            right_boundary = physical_params[-1].at[0].set(0)
         self.bistable_potential_params = jnp.vstack((left_boundary, physical_params, right_boundary))  # all k_trusses the same, but length, theta0, vary experimentally
-        a0 = (length) * jnp.tan(theta0)
+        rest_length = length / jnp.cos(theta0) - 2 * b
+        a0 = (rest_length + 2 * b) * jnp.sin(theta0)
         self.equilibrium1 = jnp.zeros_like(a0)
         self.equilibrium2 = 2 * a0

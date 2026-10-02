@@ -38,15 +38,15 @@ class VariablesConfig:
 
     # relevant for both
     k_truss: float = 1428.0  # stiffness of one Von Mises truss arm, [N/m] (=[kg/s^2]), 1st paper
-    m1 = 70*10**(-3) # m_out [kg], 1st paper
+    # m1 = 70*10**(-3) # m_out [kg], 1st paper
     # m1: float = 33.6e-3  # outer, 2nd paper beginning
-    # m1: float = 45e-3  # outer, discerning mass Oct1
+    m1: float = 30e-3  # outer, discerning mass Oct1
     m2 = 30e-3 # uniform physical inner masses [kg], 1st paper
     # m2: float = 3.8e-3  # inner, 2nd paper beginning
     increasing_m_range: tuple[float, float] = (3.8, 8.5)
-    k1 = 125 # [N/m]  # outer, 1st paper
+    # k1 = 125 # [N/m]  # outer, 1st paper
     # k1: float = 2 * 1020.0  # outer, 2nd paper [N/m] (=[kg/s^2])
-    # k1 = 400  # [N/m] discerning force Oct1
+    k1 = 500  # [N/m] discerning force Oct1
     c1: float = 0.22  # damping of outer mass [kg/s], 1st paper
     c2: float = 0.1  # damping of inner mass [kg/s], 1st paper
     mu_k: float = 0.0675  # coefficient of kinetic friction
@@ -67,7 +67,7 @@ class SupervisorConfig:
     # amplitude: float = 2.5e-3  # my try Sep29
     # frequency: float = 10  # probe 1st paper
     # frequency: float = 23.3  # probe 2nd paper
-    frequency: float = 20  # discerning force Oct1
+    frequency: float = 23.3  # discerning force Oct1
     gaussian_width: float | None = None
     start_time: float = 0.025  # Start-time offset [s] for both input types
     second_pulse_factor: float = 1.5
@@ -83,13 +83,13 @@ class SupervisorConfig:
 
     # training params, not relevant for Nathan
     T: int = 64
-    alpha: float = 1.0
-    algorithm: str = "short"  # Options: "short" or "long" (resetting), or "random" for random attempt
-    # algorithm: str = "random"  # Options: "short" or "long" (resetting), or "random" for random attempt
+    alpha: float = 2.0
+    # algorithm: str = "short"  # Options: "short" or "long" (resetting), or "random" for random attempt
+    algorithm: str = "random"  # Options: "short" or "long" (resetting), or "random" for random attempt
     if algorithm == "random":
         rand_key_dataset = 33
     loss_type: str = "state"
-    lo_A: float = 4.0e-3  # [mm]
+    lo_A: float = 10.0e-3  # [mm]
     hi_A: float = 40.0e-3  # [mm]
 
 
